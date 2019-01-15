@@ -1,5 +1,5 @@
 # 3-prime-READS-plus
-## Pipeline for analyzing 3' end RNA-seq (3'READS+) data
+## Pipeline for analyzing 3' end RNA-seq (3'READS+) data 
 
 [3'READS+](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5029459/) is a 3' end RNA-seq protocol that produces sequencing reads with variable number of T-streches in the beginning (5') of the reads. Steming from partial digestion of the poly(A) tail and absent from the genome, these T-streches can be used to identify cleavage and polyadenylation sites in the genome. However, long T-streches can also mislead alignment of the reads to the genome. Moreover, due to micro-heterogeneity, the mapped reads that are close to each other in the genome need to be clustered into cleavage and polyadenylation (pA) sites.
 
@@ -11,4 +11,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 ## Installation
 
 ## Quick Start
+You write a high level configuration file specifying your inputs and analysis parameters. This input drives a parallel run that handles distributed execution, idempotent processing restarts and safe transactional steps. 
 To use this pipeline, please follow the following steps. 
+
+https://github.com/bcbio/bcbio-nextgen
