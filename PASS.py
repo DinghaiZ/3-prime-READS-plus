@@ -128,13 +128,12 @@ def count_pass(input_file):
     Counts the number of pass or nonpass records in sam file
     """
     from subprocess import check_output
-   
+    # skip header using grep
     cmd = 'grep -v @ ' + input_file + ' | wc -l' 
     cmd_out = check_output(cmd, shell=True)
-    #print(cmd_out)
-    count = int(str(cmd_out).split('\'')[1].strip('\\n'))
-    
-    return count
+    count = int(str(cmd_out).split('\'')[1].strip('\\n')) 
+    sample_name = input_file.split('/')[-1].split('.')[0]
+    return (sample_name, count)
     
 ################################################################################
     
