@@ -1249,7 +1249,6 @@ def count_unique_reads_in_folder(sam_dir, outfolder,
             f.write('%s,%s,%s\n' % rec)
    
   
-################################################################################ 
 def find_neighboring_indexes(v, max_distance):
     """ 
     v is like [[100395423, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]],...],
@@ -1259,16 +1258,16 @@ def find_neighboring_indexes(v, max_distance):
     # a container to hold list of liss
     index_list = []
     for i in range(len(v))[:-1]:
-        if v[i+1][0] - v[i][0] <= max_distance:
+        if v[i + 1][0] - v[i][0] <= max_distance:
             #index_list.extend([i, i+1])
             index_list.append(i)
             continue
         if len(index_list) > 0:
-            index_list.append(i) # append the last neighbor
+            index_list.append(i)  # append the last neighbor
             yield index_list
             index_list = []
-            
-################################################################################
+
+
 def cluster_neighboring_cleavage_sites(cs_cluster, max_distance):
     """
     cs_cluster is like:[position, [num in sam_files]] (Ordered by position)
@@ -1277,78 +1276,83 @@ def cluster_neighboring_cleavage_sites(cs_cluster, max_distance):
      [155603445, [8, 1, 4, 13, 20, 8, 6, 0, 5, 19, 5, 19]]], with
     Neighboring positions located within max_distance from each other are merged. 
     Recursively merge the CS in the cluster: devide and conqurer!
-    
+
     """
     #import itertools
-    sample_number = len(cs_cluster[0][1])//2 ### different from python 2.7
+    sample_number = len(cs_cluster[0][1]) // 2  # different from python 2.7
     # check base case
     clustered = True
     for i in range(len(cs_cluster))[:-1]:
-        if cs_cluster[i+1][0] - cs_cluster[i][0] <= max_distance:
+        if cs_cluster[i + 1][0] - cs_cluster[i][0] <= max_distance:
             clustered = False
     if clustered == True:
         return True
     # when the clustering is not completed:
     else:
-        # get max of normalized read numbers from all samples and the index for max       
-        #print(cs_cluster)
-        (m,i) = max((v,i) for i,v in enumerate((sum(pos_num[1][sample_number:]) for pos_num in cs_cluster)))
+        # get max of normalized read numbers from all samples and the index for max
+        # print(cs_cluster)
+        (m, i) = max((v, i) for i, v in enumerate((sum(pos_num[1][sample_number:])
+                                                   for pos_num in cs_cluster)))
         # merge cs within max_distance from the cs with max read number
-        left_index = i #leftmost position merged
-        right_index = i #rightmost position merged
+        left_index = i  # leftmost position merged
+        right_index = i  # rightmost position merged
         for j, (pos, nums) in enumerate(cs_cluster):
             if abs(pos - cs_cluster[i][0]) <= max_distance and \
-            abs(pos - cs_cluster[i][0]) > 0:
+                    abs(pos - cs_cluster[i][0]) > 0:
                 # combine the read numbers for two CS, sample by sample
-                # cs_cluster[i] is like [155603471, [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]]
-                # nums is like [0, 0, 0, 0, 0, 5, 1, 0, 0, 0, 0, 0] 
-                cs_cluster[i][1] = [sum(x) for x in zip(cs_cluster[i][1], nums)]
-                cs_cluster[j][1] = 0 # don't delete cs_cluster[j]
+                # cs_cluster[i] is like
+                # [155603471, [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]]
+                # nums is like [0, 0, 0, 0, 0, 5, 1, 0, 0, 0, 0, 0]
+                cs_cluster[i][1] = [sum(x)
+                                    for x in zip(cs_cluster[i][1], nums)]
+                cs_cluster[j][1] = 0  # don't delete cs_cluster[j]
                 left_index = min(left_index, j)
                 right_index = max(right_index, j)
-        
-        # devide and conqure        
-        if left_index > 0:        
-            cluster_neighboring_cleavage_sites(cs_cluster[:left_index], max_distance)
+
+        # devide and conqure
+        if left_index > 0:
+            cluster_neighboring_cleavage_sites(cs_cluster[:left_index],
+                                               max_distance)
         if right_index < len(cs_cluster) - 1:
-            cluster_neighboring_cleavage_sites(cs_cluster[right_index+1:], max_distance)   
-            
-################################################################################
-def cluster_reads_in_dir(infolder, outfolder, 
-                         file_pattern = 'pass.unique.sam', 
-                         direction = 'reverse', 
-                         max_distance = 24,
-                         outfile = 'cluster.numbers.csv'):
+            cluster_neighboring_cleavage_sites(cs_cluster[right_index + 1:],
+                                               max_distance)
+
+
+def cluster_reads_in_sam_dir(file_pattern='pass.unique.sam',
+                             outfile='cluster.numbers.csv',
+                             direction='reverse',
+                             max_distance=24):
     """
     Analyze a sam file and first generate a table with the following columns: 
-    chromosome, strand, pos, num. Then recursively combine reads with LAP within 24 nt, 
-    from pos with the highest read number to the pos with next highest read 
-    number.
-    
+    chromosome, strand, pos, num. Then recursively combine reads with LAP within 
+    24 nt, from pos with the highest read number to the pos with next highest 
+    read number.
+
     Read sam files with file_pattern in infolder. For each sam file, build a dict
     readcounts like {'chr9:-:100395423':[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]}.
     The [list of int] saves the number of reads from each sam_file. 
     dict is like sample_count[sample1(str)] = num_from_sample1(int)
-       
+
     """
-    
-    import os    
-    sam_files = [file_name for file_name in os.listdir(infolder) if file_name.endswith(file_pattern)]
+
+    import os
+    sam_files = [file_name for file_name in os.listdir(sam_dir)
+                 if file_name.endswith(file_pattern)]
     sam_file_num = len(sam_files)
-        
+
     import re
-    #re_pattern = re.compile('LM:i:(\d+)')
+    # regular expression pattern for finding last mapped position (LM) in read names
     re_pattern = re.compile('LM:i:(\d+)')
-    
-    import collections 
+
+    import collections
     # readcounts is a read id counter
-    #example: {'chr9:-:100395423':[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]}
-    readcounts = {} 
-    # loop through sam files and get read numbers for each read id from each sam file  
-    for s, sam_file in enumerate(sam_files): #s will be used as index
+    # example: {'chr9:-:100395423':[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]}
+    readcounts = {}
+    # go through sam files and get read numbers for each read id from each sam file
+    for s, sam_file in enumerate(sam_files):
         # read sam file, calculate read id, and count number of reads
-        #print('Reading ' + sam_file)        
-        fin = open(os.path.join(infolder, sam_file), 'r')
+        # s will be used as index
+        fin = open(os.path.join(sam_dir, sam_file), 'r')
         for line in fin:
             if line[0] == '@':
                 continue
@@ -1357,17 +1361,17 @@ def cluster_reads_in_dir(infolder, outfolder,
             flag = elements[1]
             # calculate strand
             if (direction == 'reverse' and flag == '16') or \
-            (direction == 'forward' and flag == '0'): 
+                    (direction == 'forward' and flag == '0'):
                 strand = '+'
             elif (direction == 'reverse' and flag == '0') or \
-            (direction == 'forward' and flag == '16'):
+                    (direction == 'forward' and flag == '16'):
                 strand = '-'
-               
+
             position = re.search(re_pattern, elements[-1]).group(1)
-        
-            read_id = ':'.join([chromosome, strand, position]) 
+
+            read_id = ':'.join([chromosome, strand, position])
             # initialize the list for holding number of reads for each file
-            readcounts.setdefault(read_id, [0]*sam_file_num)[s] += 1
+            readcounts.setdefault(read_id, [0] * sam_file_num)[s] += 1
             """
             # when s is 0 and sam_file[s] is the first one analyzed,
             # readcount.popitem() may return something like 
@@ -1376,63 +1380,66 @@ def cluster_reads_in_dir(infolder, outfolder,
             # readcount.popitem() may return something like:
             # ('chr11:+:31270274', [6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
             """
-            
+
         fin.close()
 
     print('Clustering reads...')
-        
-    # calculate the normalized read numbers and attach to the read numbers    
+
+    # calculate the normalized read numbers and attach to the read numbers
     import pandas as pd
-    df = pd.DataFrame(readcounts)    
+    df = pd.DataFrame(readcounts)
     df = df.T
-    normalized = df/df.sum(0)
-    df = pd.concat([df, normalized], axis = 1, ignore_index = True)
-    readcounts = df.T.to_dict('list')    
+    normalized = df / df.sum(0)
+    df = pd.concat([df, normalized], axis=1, ignore_index=True)
+    readcounts = df.T.to_dict('list')
     # readcount.popitem() may return something like:
-    #  ('chr11:+:31270274', [6.0, 7.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
+    #  ('chr11:+:31270274', [6.0, 7.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
     #  0.0, 0.0, 9.1427902698768829e-07,3.0861678694165542e-06, 0.0, 0.0 ...]),
     # with the first 12 values as read counts and the next 12 values as normalized
     # read counts
-    
+
     # separate positions based on chrmosome & strand combination
     poscounts = collections.defaultdict(list)
     while len(readcounts) > 0:
-        k,v = readcounts.popitem() # saves memory
+        k, v = readcounts.popitem()  # saves memory
         k = k.split(':')
-        poscounts[':'.join(k[:2])].append([int(k[2]),v]) # don't forget int()!!!
-        # poscounts.popitem()        
-        #example: {'chr9:-':[[100395423, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]],...]}
+        poscounts[':'.join(k[:2])].append(
+            [int(k[2]), v])  # don't forget int()!!!
+        # poscounts.popitem() is like
+        # {'chr9:-':[[100395423, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]],...]}
     del readcounts
-    
-    # sort the list of lists for each chromosome & strand combination    
-    for k,v in poscounts.items(): 
+
+    # sort the list of lists for each chromosome & strand combination
+    for k, v in poscounts.items():
         # sort in place to save memory
-        v.sort(key = lambda val: val[0]) 
+        v.sort(key=lambda val: val[0])
         # get the indexes of lists containing neighboring positions
         for indexes in find_neighboring_indexes(v, max_distance):
-            #print(indexes)            
+            # print(indexes)
             # extract the cluster
-            cs_cluster = v[indexes[0]:(indexes[-1]+1)]
+            cs_cluster = v[indexes[0]:(indexes[-1] + 1)]
             # the original list in the dict will be edited in place:
             cluster_neighboring_cleavage_sites(cs_cluster, max_distance)
         # delete positions with 0 read number after clustering
         poscounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
-    
-    # write the result to disk in csv format   
+
+    # write the result to disk in csv format
     print('Writing to file...')
-    with open(os.path.join(outfolder, outfile), 'w') as fout:
-        # write header        
-        #sample_string = ','.join([sam_file + '.num' for sam_file in sam_files])
-        sample_string = ','.join([sam_file.split('.')[0] for sam_file in sam_files])
-        fout.write('chromosome,strand,position,%s\n' %sample_string)
+    outfile = os.path.join(result_dir, outfile)
+    with open(outfile, 'w') as fout:
+        # write header
+        sample_string = ','.join([sam_file.split('.')[0]
+                                  for sam_file in sam_files])
+        fout.write('chromosome,strand,position,%s\n' % sample_string)
         # write read counts for each cluster
         for k in poscounts:
             chromosome, strand = k.split(':')
             for record in poscounts[k]:
                 position = str(record[0])
-                counts = ','.join([str(int(count)) for count in record[1][:sam_file_num]])
-                fout.write('%s,%s,%s,%s\n'%(chromosome, strand, position, counts))
-                
+                counts = ','.join([str(int(count)) for count
+                                   in record[1][:sam_file_num]])
+                fout.write('%s,%s,%s,%s\n' %
+                           (chromosome, strand, position, counts))
                
 ################################################################################
 def cluster_CS_in_dirs(infolders, outfolder, 
