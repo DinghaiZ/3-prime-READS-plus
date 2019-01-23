@@ -12,7 +12,6 @@ import os
 
 import re
 
-################################################################################
 
 class Fastq(object):
     """
@@ -69,7 +68,6 @@ class Fastq(object):
         self.qual = self.qual[:i+1]
 
   
-################################################################################
 
 def read_barcode(barcode_file):
     """
@@ -108,8 +106,8 @@ def sample_colors(barcode_file):
     	        continue
         samplecolors[fields[2].replace('.', '_').rstrip()] =  fields[3]
     return samplecolors
+
     
-################################################################################
 def count_fastq(input_file):
     """
     Counts the number of fastq records in fastq file
@@ -135,7 +133,6 @@ def count_pass(input_file):
     sample_name = input_file.split('/')[-1].split('.')[0]
     return (sample_name, count)
     
-################################################################################
     
 def reader_fastq(infile):
     """Generator of Fastq object from given file"""
@@ -168,7 +165,6 @@ def reader_fastq(infile):
                 yield Fastq(name, seq, qual)
         
             
-################################################################################
     
 def count_fastq_length(infolder, outfolder, pattern = 'trimmed.fastq', 
                       outfile = 'fastq_len.csv'):
@@ -203,7 +199,7 @@ def count_fastq_length(infolder, outfolder, pattern = 'trimmed.fastq',
             string = ','.join([str(num) for num in row]) + '\n' 
             fout.write(string)
             
-################################################################################
+
 def fastq_trim_Ns(infile, outfile, random_NT_len=4):
     '''
     If the 3' end of the read has been trimmed by cutadapt to remove the 3' end
@@ -238,7 +234,6 @@ def fastq_trim_Ns(infile, outfile, random_NT_len=4):
 
 
 
-################################################################################
 def fastq_trim_Ts_2(infile, random_NT_len=3):
     '''
     Trim the first random nucleotides from 3' adapter and save them in the read
@@ -292,8 +287,8 @@ def fastq_trim_Ts_2(infile, random_NT_len=3):
             if len(seq) >= 18:
                 outhandle.write('\n'.join([read_name, seq, '+', qual]) + '\n')
     os.system('rm ' + infile)               
-            
-################################################################################
+
+
 def fastqgz_trim_Ts(infile, outfile, random_NT_len=3):
     '''
     Similar to gastq_trim_Ts(), but read and write .gz files
@@ -334,7 +329,6 @@ def fastqgz_trim_Ts(infile, outfile, random_NT_len=3):
                 outhandle.write('\n'.join([read_name, seq, '+', qual]) + '\n')
             
 
-################################################################################            
 def fastq_trim_As(infile, outfile, random_NT_len=0):
     '''
     Trim the first random nucleotides from 3' adapter and save them in the read
@@ -383,7 +377,8 @@ def fastq_trim_As(infile, outfile, random_NT_len=0):
             # Only keep the remaining sequence if its length is >= 18 nt
             if len(seq) >= 18:
                 outhandle.write('\n'.join([read_name, seq, '+', qual]) + '\n')            
-################################################################################
+
+
 def load_fasta_genome(genome_dir = '/HPCTMP_NOBKUP/wl314/data/ucsc/genomes/mm9'):
     '''
     Read specified genomic sequence saved in genome_dir into a dict.
@@ -400,7 +395,7 @@ def load_fasta_genome(genome_dir = '/HPCTMP_NOBKUP/wl314/data/ucsc/genomes/mm9')
             genome[fasta_file.replace('.fa', '')] = line.replace('\n', '')
     return genome
     
-################################################################################
+
 def load_fasta_genome_2(genome_dir = '/HPCTMP_NOBKUP/wl314/data/ucsc/genomes/mm9'):
     '''
     Read specified genomic sequence saved in genome_dir into a dict in shared memory.
@@ -422,11 +417,7 @@ def load_fasta_genome_2(genome_dir = '/HPCTMP_NOBKUP/wl314/data/ucsc/genomes/mm9
             genome[fasta_file.replace('.fa', '')] = line.replace('\n', '')
     return genome
     
-   
         
-    
-    
-################################################################################
 def reverse_complement(seq, mol_type = 'DNA'):
     #genomic sequence is a mixture of lower and upper cases    
     seq = seq.upper()
@@ -438,7 +429,7 @@ def reverse_complement(seq, mol_type = 'DNA'):
     for base in reversed(seq))
     return reverse_complement
     
-################################################################################
+
 def complement(seq, mol_type = 'DNA'):
     #genomic sequence is a mixture of lower and upper cases    
     seq = seq.upper()
@@ -448,8 +439,8 @@ def complement(seq, mol_type = 'DNA'):
         complement = {'A': 'U', 'C': 'G', 'G': 'C', 'U': 'A', 'N': 'N'}
     new = "".join(complement.get(base) for base in seq)
     return new
-    
-################################################################################
+
+
 def get_seq(chromosome, strand, start, end, genome):
     '''Get the genomic sequence specified. 'genome' is a dict.
     Reverse strand sequence is reversecomplemented.'''
@@ -462,7 +453,6 @@ def get_seq(chromosome, strand, start, end, genome):
     return seq
     
         
-################################################################################    
 def pick_PASS(sam_in, sam_pass, sam_nopass, sam_ref, genome, 
               min_mapq = 10, direction = 'reverse'):
     '''Loop through records in the sam_in file, if the record is PASS, write to
@@ -583,7 +573,7 @@ def pick_PASS(sam_in, sam_pass, sam_nopass, sam_ref, genome,
     sam_nopass_file.close() 
     sam_ref_file.close()
 
-################################################################################    
+
 def pick_PASS_2(sam_file, genome, min_mapq = 10,  direction = 'reverse'):
     """
     Loop through records in the sam file, if the record is PASS, write to
@@ -711,7 +701,6 @@ def pick_PASS_2(sam_file, genome, min_mapq = 10,  direction = 'reverse'):
     sam_ref_file.close()
     
 
-################################################################################    
 def pick_PASS_3(sam_file, genome, min_mapq = 10,  direction = 'reverse'):
     """
     Loop through records in the sam file, if the record is PASS, write to
@@ -840,7 +829,6 @@ def pick_PASS_3(sam_file, genome, min_mapq = 10,  direction = 'reverse'):
     sam_ref_file.close()    
     
     
-################################################################################    
 def pick_PASS_4(sam_file, min_mapq=10,  direction='reverse'):
     """
     Loop through records in the sam file, if the record is PASS, write to
@@ -972,7 +960,6 @@ def pick_PASS_4(sam_file, min_mapq=10,  direction='reverse'):
     
 
     
-################################################################################
 def count_pass_in_folder(pass_dir, outfolder,  
                           outfile = 'pass_num.csv'):
     '''Count number of pass and nonpass reads in sam files in the pass_dir'''
@@ -1011,7 +998,6 @@ def count_pass_in_folder(pass_dir, outfolder,
             f.write('%s,%s,%s,%s\n' % rec)
             
             
-################################################################################    
 def count_5Ts_in_folder_2(pass_dir, result_dir):
     '''Count the number of reads with certain 5'T-stretch lengths for pass and 
     nopass reads in files in the pass_dir.'''
@@ -1110,7 +1096,6 @@ def count_5Ts_in_folder_3(sam_dir):
 
     return TS
 
-################################################################################    
 def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length = 5):
     '''Pick PASS reads with at least min_length mapped 5' Ts in pass_in and copy 
     them into the astretch_out file. '''
@@ -1137,7 +1122,6 @@ def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length = 5):
     fout2.close()
     
 
-################################################################################  
 def count_MAP_in_folder(pass_dir, result_dir, pattern = 'pass\.sam$',
                         outfile = 'map.scores.csv'):
     '''Count the number of reads with certain MAP scores for reads in sam 
@@ -1171,7 +1155,6 @@ def count_MAP_in_folder(pass_dir, result_dir, pattern = 'pass\.sam$',
 count_MAP_in_folder(pass_dir = '../data/batch2', result_dir = '../result/batch3', pattern = 'fastq\.sam$',
                         outfile = 'test.map.scores.csv')
 '''                        
-################################################################################
 def select_unique_fragments(random_NT_len, infile, outfile):
     '''Use the TS\d+[ATCG]{3} string in read name and chromosome, flag, and LM 
     tags to identify potential PCR duplicates.'''
@@ -1208,7 +1191,6 @@ def select_unique_fragments(random_NT_len, infile, outfile):
                     unique_ids.add(this_id)
                     fout.write(line)
 
-################################################################################
 def select_unique_fragments_2(input_file, random_NT_len):
     '''
     Use the TS\d+[ATCG]{3} string in read name and chromosome, flag, and LM 
@@ -1249,7 +1231,6 @@ def select_unique_fragments_2(input_file, random_NT_len):
                     unique_ids.add(this_id)
                     fout.write(line)
                     
-################################################################################
 def count_unique_reads_in_folder(sam_dir, outfolder, 
                           outfile = 'unique_pass_num.csv'):
     '''Count number of pass and ref_pass reads in sam files in the pass_dir'''
@@ -1473,7 +1454,6 @@ def cluster_reads_in_sam_dir(file_pattern='pass.unique.sam',
                 fout.write('%s,%s,%s,%s\n' %
                            (chromosome, strand, position, counts))
                
-################################################################################
 def cluster_CS_in_dirs(infolders, outfolder, 
                          cs_file_name = 'CS.all.reads.csv', 
                          #direction = 'reverse', 
@@ -1595,8 +1575,6 @@ def cluster_CS_in_dirs(infolders, outfolder,
                 fout.write('%s,%s,%s,%s\n'%(chromosome, strand, position, counts))
                 
         
-################################################################################
-################################################################################
 # the sam2bigwid() function cannot be defined within make_url().
 # functions are only picklable if they are defined at the top-level of a module.
 def sam2bigwig(sam_file):
@@ -1674,7 +1652,6 @@ def make_url(project, experiment, sam_dir, genome_size, genomeCoverageBed,
 
 
 
-################################################################################
 # sam -> bam -> bigwig
 def make_CLIP_url(project, batch, sam_dir, result_dir, genome_size, 
              genomeCoverageBed, norm_bedgraph, bedGraphToBigWig):
@@ -1766,7 +1743,6 @@ def make_CLIP_url(project, batch, sam_dir, result_dir, genome_size,
             f.write(track)
     f.close()     
 
-################################################################################
 # sam -> bam -> bigwig
 def make_RNAseq_url(project, batch, sam_dir, result_dir, genome_size, 
              genomeCoverageBed, norm_bedgraph, bedGraphToBigWig):
