@@ -1076,7 +1076,40 @@ def count_5Ts_in_folder_2(pass_dir, result_dir):
     
     return(TS, ML, UL)
 
+def count_5Ts_in_folder_3(sam_dir):
+    '''
+    Count the number of reads with certain 5'T-stretch lengths for pass and 
+    nopass reads in files in the sam_dir. Return a DataFrame.
+    '''
+    sample_names = []
+    results = []  # container
 
+    import re
+    import numpy as np
+    import pandas as pd
+
+    for sam_file in [filename for filename in os.listdir(sam_dir)
+                     if re.search('Aligned.out.(no)?pass$', filename)]:
+        file_in = os.path.join(sam_dir, sam_file)
+        sample_names.append(sam_file.split(
+            '.')[0] + '.' + sam_file.split('.')[-1])
+
+        with open(file_in, 'r') as f:
+            string = f.read()
+            # search patterns in the file
+            TS = re.findall('\nTS(\d+)', string)  # 5' t-strech
+            # count number of different lengths of T-stretch
+            TS = [TS.count(str(i)) for i in range(51)]  # 50 sequencing cycles
+            # save the result
+            results.append(TS)
+
+    # create DataFrame
+    TS = np.array(results).T
+    TS = np.insert(TS, 0, values=np.arange(51), axis=1)  # insert T length
+    TS = pd.DataFrame(data=TS, columns=['T_Stretch_Length'] + sample_names)
+
+    return TS
+    
 ################################################################################    
 def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length = 5):
     '''Pick PASS reads with at least min_length mapped 5' Ts in pass_in and copy 
