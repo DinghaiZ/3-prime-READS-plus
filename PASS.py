@@ -1178,36 +1178,39 @@ def select_unique_fragments(random_NT_len, infile, outfile):
 
 ################################################################################
 def select_unique_fragments_2(input_file, random_NT_len):
-    '''Use the TS\d+[ATCG]{3} string in read name and chromosome, flag, and LM 
-    tags to identify potential PCR duplicates.'''
+    '''
+    Use the TS\d+[ATCG]{3} string in read name and chromosome, flag, and LM 
+    tags to identify potential PCR duplicates.
+    '''
     output_file = input_file.replace('.pass', '.unique.pass')
     import itertools
-    # make a set to save unique ids    
+    # make a set to save unique ids
     unique_ids = set()
     # precompile the search patter
-    pattern = re.compile('TS(\d+[ATCGN]{%s})'% random_NT_len)
+    pattern = re.compile('TS(\d+[ATCGN]{%s})' % random_NT_len)
     fout = open(output_file, 'w')
     # open infile, calculate the id
     with open(input_file, 'r') as fin:
-        #print('Identifying uPASS in ' + input_file)        
+        #print('Identifying uPASS in ' + input_file)
         for line in fin:
             if line[0] == '@':
-                fout.write(line)                
+                fout.write(line)
                 continue
-            #print(line)
+            # print(line)
+
             # calculate the id for the read
             l = line.split()
             m = re.match(pattern, l[0])
             # calculate read length
             cigar = l[5]
-            nums = re.split('[MDN]', re.sub('\d+I','', cigar))[:-1]
-            covered =  sum(int(x) for x in nums)            
+            nums = re.split('[MDN]', re.sub('\d+I', '', cigar))[:-1]
+            covered = sum(int(x) for x in nums)
             if m:
                 l = [m.group(1), l[1:3], l[-1][:-1], str(covered)]
                 # if 4N has been trimmed from 3' end
                 cutadapt = re.search('4N([ATCG]{4})4N', l[0])
                 if cutadapt:
-                    l.append(cutadapt.groups[0]) 
+                    l.append(cutadapt.groups[0])
                 this_id = ''.join(list(itertools.chain(*l)))
                 # only copy the line if this_id has not been seen before
                 if not this_id in unique_ids:
