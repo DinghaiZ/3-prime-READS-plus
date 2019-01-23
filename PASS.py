@@ -1109,7 +1109,7 @@ def count_5Ts_in_folder_3(sam_dir):
     TS = pd.DataFrame(data=TS, columns=['T_Stretch_Length'] + sample_names)
 
     return TS
-    
+
 ################################################################################    
 def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length = 5):
     '''Pick PASS reads with at least min_length mapped 5' Ts in pass_in and copy 
@@ -1597,101 +1597,81 @@ def cluster_CS_in_dirs(infolders, outfolder,
         
 ################################################################################
 ################################################################################
-# sam -> bam -> bigwig
-def make_url(project, batch, pass_dir, result_dir, genome_size, 
-             genomeCoverageBed, norm_bedgraph, bedGraphToBigWig):
-    for sam_file in [filename for filename in os.listdir(pass_dir) 
-    if re.search('\.pass.sam$', filename)]:
-        prefix = sam_file.split('.')[0]    
-        sam_file = os.path.join(pass_dir, sam_file)
-        #prefix = re.sub('\.sam$', '', sam_file)
-        prefix = os.path.join(pass_dir, prefix)
-        cmd = 'samtools view -uS ' + sam_file + ' | ' + 'samtools sort - ' + prefix # why need "-"?
-        print(cmd)
-        os.system(cmd)
-        # I got the warning: [bam_header_read] EOF marker is absent. The input is probably truncated.
-        # The warning should be ignored. Using samtools view -u gives uncompressed bam, and these do not have the EOF marker. 
-    
-        
-        # bam to bigwig
-        cmd = genomeCoverageBed + '-bg -split -ibam ' + prefix + '.bam ' + \
-        '-strand + -g ' + genome_size + ' > ' + prefix + '.m.bedgraph' 
-        print(cmd)
-        os.system(cmd)
-        cmd = genomeCoverageBed + '-bg -split -ibam ' + prefix + '.bam ' + \
-        '-strand - -g ' + genome_size + ' > ' + prefix + '.p.bedgraph' 
-        print( cmd)
-        os.system(cmd)
-        
-        # normolize bedgraph counts
-        #cmd = 'wc -l ' + sam_file
-        #from subprocess import check_output
-        #cmd_out = check_output(cmd, shell=True)
-        #totalReadNum = int(cmd_out.split(' ')[0]) - 55
-        #cmd = norm_bedgraph + '-t ' + str(totalReadNum) + ' -i "' + prefix + \
-        #'.p.bedgraph ' + prefix + '.m.bedgraph"' #+ ' -m "' + prefix + '.p.bedgraph"'
-        #print( cmd)
-        #os.system(cmd)
-        
-        cmd = 'grep -v @ ' + sam_file + ' | wc -l'
-        from subprocess import check_output
-        cmd_out = check_output(cmd, shell=True)
-        totalReadNum = int(cmd_out.split(' ')[0]) 
-        cmd = norm_bedgraph + '-t ' + str(totalReadNum) + ' -i "' + prefix + \
-        '.p.bedgraph ' + prefix + '.m.bedgraph"' #+ ' -m "' + prefix + '.p.bedgraph"'
-        print(cmd)
-        os.system(cmd)
-                
-        
-        # convert to bw
-        cmd = bedGraphToBigWig + prefix + '.p.bedgraph.normolized ' + \
+# the sam2bigwid() function cannot be defined within make_url().
+# functions are only picklable if they are defined at the top-level of a module.
+def sam2bigwig(sam_file):
+    prefix = sam_file.split('.')[0]
+    sam_file = os.path.join(sam_dir, sam_file)
+    prefix = os.path.join(sam_dir, prefix)
+
+    # sam -> bam
+    cmd = samtools + ' view -uS ' + sam_file + ' | ' + samtools + \
+        ' sort - ' + prefix
+    # print(cmd)
+    os.system(cmd)
+
+    # bam -> bedGraph
+    totalReadNum = count_pass(sam_file)[1]
+    cmd = genomeCoverageBed + '-bg -split -ibam ' + prefix + '.bam ' + \
+        '-strand + -g ' + genome_size + ' -scale ' + str(-10**6/totalReadNum) + \
+        ' > ' + prefix + '.m.bedgraph'
+    # print(cmd)
+    os.system(cmd)
+    cmd = genomeCoverageBed + '-bg -split -ibam ' + prefix + '.bam ' + \
+        '-strand - -g ' + genome_size + ' -scale ' + str(10**6/totalReadNum) + \
+        ' > ' + prefix + '.p.bedgraph'
+    #print(cmd)
+    os.system(cmd)
+
+    # bedgraph -> bigWig
+    cmd = bedGraphToBigWig + prefix + '.p.bedgraph ' + \
         genome_size + ' ' + prefix + '.p.bw'
-        print( cmd)
-        os.system(cmd)
-        cmd = bedGraphToBigWig + prefix + '.m.bedgraph.normolized ' + \
+    # print(cmd)
+    os.system(cmd)
+    cmd = bedGraphToBigWig + prefix + '.m.bedgraph ' + \
         genome_size + ' ' + prefix + '.m.bw'
-        print( cmd)
-        os.system(cmd)
-        
-        # remove intermediate files
-        cmd = 'rm ' + prefix + '*.bam'
-        os.system(cmd)
-        cmd = 'rm ' + prefix + '*bedgraph*'
-        os.system(cmd)
-    # copy the bigwig files to the http-enabled intron server
-    #cmd = 'scp ' + os.path.join(pass_dir, '*.bw') + ' zhengdh@intron.njms.rutgers.edu:~/../www/zhengdh/bigwig/' + project 
-    #os.system(cmd)
-    
-    # record sample names for the bw files
-    bw_files = [filename for filename in os.listdir(pass_dir) 
-    if filename.endswith('.bw')]
-    bw_samples = sorted(list(set([filename.split('.')[0] for filename in bw_files])))
-    #bw_samples.sort(key = lambda x: x[-1])
-    
-    #cmd = 'rm ' + os.path.join(pass_dir, '*.bw')
-    
-    strand2str = {'+': 'p', '-':'m'}
-    f = open(os.path.join(result_dir, 'bigwigCaller.txt'), 'w')
+    # print(cmd)
+    os.system(cmd)
+
+    # remove intermediate files
+    cmd = 'rm ' + prefix + '*.bam'
+    os.system(cmd)
+    cmd = 'rm ' + prefix + '*bedgraph*'
+    os.system(cmd)
+
+
+# sam -> bam -> bigwig
+def make_url(project, experiment, sam_dir, genome_size, genomeCoverageBed,
+             bedGraphToBigWig):
+    from subprocess import check_output
+
+    # parallel computing
+    sam_files = sorted(glob.glob(os.path.join(sam_dir, '*.Aligned.out.pass')))
+    with mp.Pool(processes=processes) as pool:
+        pool.map(sam2bigwig, sam_files)
+
+    # create UCSC genome browser tracks
+    bw_files = [filename for filename in os.listdir(sam_dir)
+                if filename.endswith('.bw')]
+    bw_samples = sorted(list(set([filename.split('.')[0]
+                                  for filename in bw_files])))
+
+    strand2str = {'+': 'p', '-': 'm'}
+    f = open(os.path.join(sam_dir, 'bigwigCaller.txt'), 'w')
     for strand in ['+', '-']:
         for (i, sample) in enumerate(bw_samples):
-            #name = sample.replace('spikein', '') + '_' + batch
             name = sample
-            #print( i, sample)
-            color = '000,000,255'
-            #if sample.startswith('AS'):
-            if re.search('AS', sample):
-                color = '255,000,000'
-            elif re.search('HP', sample):
-                color = '255, 100,000'
-                
+            color = list(colors)[int(sample_color[sample]) - 1]
             track = 'track type=bigWig visibility=2 alwaysZero=on color=' + \
-            color +' graphType=bar maxHeightPixels=30:30:30 itemRgb=On group=' + \
-            project + ' name="' + name \
-             + strand + '" description=\"3\'READS+\"' + \
-             ' bigDataUrl=http://intron.njms.rutgers.edu/zhengdh/bigwig/' + \
-             project + '/' + batch + '/' + sample + '.' + strand2str[strand] + '.bw' + '\n'
+                color + ' graphType=bar maxHeightPixels=30:30:30 itemRgb=On group=' + \
+                project + ' name="' + name + strand + '" description="' + name + ' ' + \
+                strand + '" bigDataUrl=http://intron.njms.rutgers.edu/zhengdh/bigwig/' + \
+                project + '/' + experiment + '/' + sample + '.' + strand2str[strand] + \
+                '.bw' + '\n'
             f.write(track)
-    f.close()     
+    f.close()
+
+
 
 
 ################################################################################
