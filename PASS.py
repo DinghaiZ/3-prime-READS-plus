@@ -291,38 +291,40 @@ def fastq_trim_Ts(infile, outfile, random_NT_len=3):
 def fastq_trim_Ts_2(infile, random_NT_len=3):
     '''
     Trim the first random nucleotides from 3' adapter and save them in the read
-    name. Also trim 5'Ts and save the number of 5' Ts in the sequence name. 
+    name. Also trim 5'Ts and save the number of 5' Ts in the read name. 
     Use a two-step trimming strategy to deal with sequencing errors in T-stretches.
     TTTTGTTVNNNN will become VNNNN. The GTT sequence will be attached to the end 
     of the read name after ::, which will be compared with genomic sequence 
-    downstream of the LAP.
-    
+    downstream of the LAP. For example:
+
     @HISEQ01:507:HBC1DADXX:1:1101:1222:2105 1:N:0:GTCCGC    
     AACTTTTGTTTTTTGACAGTCTCAAGTTTTTATTCAGTGGGTCTCTGTGTC
+    
     becomes:
+    
     @TS11AAC:507:HBC1DADXX:1:1101:1243:2103 1:N:0:GTCCGC
     GACAGTCTCAAGTTTTTATTCAGTGGGTCTCTGTGTC
     TS11: T-stretch length is 11; AAC: the three random nucleotide is AAC
-    
+
     '''
     import re
-    pattern = re.compile('([ATCGN]{%d})(T*)'% random_NT_len)#precompile
+    pattern = re.compile('([ATCGN]{%d})(T*)' % random_NT_len)  # precompile
     outfile = infile.replace('.fastq', '.trimmed.fastq')
     with open(outfile, 'w') as outhandle:
         for fq in reader_fastq(infile):
             seq = fq.get_seq()
             qual = fq.get_qual()
-            
-            match1 = re.match(pattern,seq)
+
+            match1 = re.match(pattern, seq)
             seq = seq[match1.end():]
             qual = qual[match1.end():]
             T_length1 = len(match1.groups()[1])
-            #read_name = '@'+fq.get_name()+' TS:'+str(match.end() - random_NT_len)
             read_name = ''.join(['@TS', str(T_length1),
-                                match1.groups()[0], fq.get_name()[7:]])
-            
-            # The second step deal with reads like TTTTTGTTTTTTTCCAGTTGTCAAATGATCCTTTAT
-            match2 = re.match('[ACGN](T+)',seq)
+                                 match1.groups()[0], fq.get_name()[7:]])
+
+            # The second step deal with reads like
+            # TTTTTGTTTTTTTCCAGTTGTCAAATGATCCTTTAT
+            match2 = re.match('[ACGN](T+)', seq)
             if match2:
                 T_length2 = len(match2.groups()[0])
                 if T_length2 > 2 and (T_length1 + T_length2) > 5:
@@ -332,12 +334,13 @@ def fastq_trim_Ts_2(infile, random_NT_len=3):
                     # attach the trimmed sequence to the read name
                     # the sequence will be compared with genomic sequence later
                     read_name = ''.join(['@TS', str(T_length1),
-                                match1.groups()[0], '::',  match2.group(0)])
+                                         match1.groups()[0], '::',  match2.group(0)])
                     #read_name = read_name + '::' + match2.group(0)
-                                      
+
             # Only keep the remaining sequence if its length is >= 18 nt
             if len(seq) >= 18:
-                outhandle.write('\n'.join([read_name, seq, '+', qual]) + '\n')                
+                outhandle.write('\n'.join([read_name, seq, '+', qual]) + '\n')
+    os.system('rm ' + infile)               
             
 ################################################################################
 def fastqgz_trim_Ts(infile, outfile, random_NT_len=3):
