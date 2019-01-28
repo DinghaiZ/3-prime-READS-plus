@@ -1,15 +1,7 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sun Jun 14 22:53:05 2015
-11/24/2015: replaced line.split('\t') with line.split() to avoid an error in 
-Python 2.7
-11/24/2015: replaced re.compile('LM:i:(\d+)\n') with re.compile('LM:i:(\d+)')
-#11/28/2015: alow rRNA reads to be saved in PASS and noPASS files
+"""This module contains functions for identification of PASS reads."""
 
-@author: dinghai
-"""
 import os
-
 import re
 
 
@@ -69,32 +61,11 @@ class Fastq(object):
 
   
 
-def read_barcode(barcode_file):
-    """
-    Return oldname:newname dict
-    """
-    assert barcode_file.endswith('.csv')
-    barcode2name = {}
-    first_line = True
-    for line in open(barcode_file):
-        #print(line)
-        fields = line.rstrip().split(',')
-        assert len(fields) > 1
-        
-        if first_line: # skip the header
-            first_line = False	        
-            if 'prefix' in fields or 'sample' in fields:
-    	        continue
-         
-        barcode2name[fields[1].rstrip()] = fields[2].replace('.', '_').rstrip()
-        #assert re.search('_\d+$', barcode2name[fields[1].rstrip()])
-        
-    return barcode2name
-    
+   
 def sample_colors(barcode_file):
-    """
-    Return newsamplename:color dict for UCSC genome browser
-    In the barcode file, color should be in the '255,0,0' format.
+    """Return newsamplename:color dict for UCSC genome browser
+    
+    Note: in the barcode file, color should be in the '255,0,0' format.
     """
     samplecolors = {}
     first_line = True
