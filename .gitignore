@@ -1,4 +1,5 @@
 *.pyc
 *checkpoint.ipynb
-*gzip
+*.gz
 .vscode/settings.json
+*.fastq

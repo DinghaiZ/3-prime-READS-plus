@@ -59,59 +59,14 @@ class Fastq(object):
         self.seq = self.seq[:i+1]
         self.qual = self.qual[:i+1]
 
-  
 
-   
-def sample_colors(barcode_file):
-    """Return newsamplename:color dict for UCSC genome browser
-    
-    Note: in the barcode file, color should be in the '255,0,0' format.
-    """
-    samplecolors = {}
-    first_line = True
-    for line in open(barcode_file):
-        fields = line.rstrip().split(',')
-        if first_line: # skip the header
-            first_line = False	        
-            if 'color' in fields or 'Color' in fields:
-    	        continue
-        samplecolors[fields[2].replace('.', '_').rstrip()] =  fields[3]
-    return samplecolors
-
-    
-def count_fastq(input_file):
-    """
-    Counts the number of fastq records in fastq file
-    """
-    from subprocess import check_output
-   
-    cmd = 'wc -l ' + input_file   
-    cmd_out = check_output(cmd, shell=True)
-    count = str(cmd_out).split('\'')[1].split(' ')[0]
-    count = int(count)//4
-    sample_name = input_file.split('/')[-1].split('.')[0]
-    return (sample_name, count)
-    
-def count_pass(input_file):
-    """
-    Counts the number of pass or nonpass records in sam file
-    """
-    from subprocess import check_output
-    # skip header using grep
-    cmd = 'grep -v @ ' + input_file + ' | wc -l' 
-    cmd_out = check_output(cmd, shell=True)
-    count = int(str(cmd_out).split('\'')[1].strip('\\n')) 
-    sample_name = input_file.split('/')[-1].split('.')[0]
-    return (sample_name, count)
-    
-    
-def reader_fastq(infile):
-    """Generator of Fastq object from given file"""
+ def fastq_reader(infile):
+    """Generator of Fastq object from a fastq or fastq.gz file"""
     i = 0
     name = None
     seq = None
     qual = None
-    if infile.endswith('.gz'):
+    if infile.endswith('fastq.gz'):
         import gzip
         for line in gzip.open(infile, 'rb'):
             i += 1
@@ -123,7 +78,7 @@ def reader_fastq(infile):
             elif i % 4 == 0:
                 qual = curr_line
                 yield Fastq(name, seq, qual)
-    else:
+    elif infile.endswith('.fastq'):
         for line in open(infile):
             i += 1
             curr_line = line.strip()
@@ -134,8 +89,34 @@ def reader_fastq(infile):
             elif i % 4 == 0:
                 qual = curr_line
                 yield Fastq(name, seq, qual)
-        
-            
+    else:
+        print("Please provide a .fastq or .fastq.gz file.")
+        raise FileNotFoundError     
+
+
+def count_fastq(fastq_file):
+    """Counts the number of fastq records in a fastq file"""
+    from subprocess import check_output
+    cmd = 'wc -l ' + fastq_file   
+    cmd_out = check_output(cmd, shell=True)
+    count = str(cmd_out).split('\'')[1].split(' ')[0]
+    count = int(count)//4
+    sample_name = fastq_file.split('/')[-1].split('.')[0]
+    return (sample_name, count)
+
+
+def count_pass(sam_file):
+    """Counts the number of pass or nonpass records in a sam file"""
+    from subprocess import check_output
+    # Skip header 
+    cmd = 'grep -v @ ' + sam_file + ' | wc -l' 
+    cmd_out = check_output(cmd, shell=True)
+    count = int(str(cmd_out).split('\'')[1].strip('\\n')) 
+    sample_name = sam_file.split('/')[-1].split('.')[0]
+    return (sample_name, count)
+    
+    
+           
     
 def count_fastq_length(infolder, outfolder, pattern = 'trimmed.fastq', 
                       outfile = 'fastq_len.csv'):
