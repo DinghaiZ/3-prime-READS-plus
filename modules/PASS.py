@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-"""This module contains functions for identification of PASS reads."""
+"""This module contains functions for identification and clustering of 
+PASS (Poly(A) Sequence Supporting) reads.
+"""
 
 import os
 import re
@@ -60,7 +62,7 @@ class Fastq(object):
         self.qual = self.qual[:i+1]
 
 
- def fastq_reader(infile):
+def fastq_reader(infile):
     """Generator of Fastq object from a fastq or fastq.gz file"""
     i = 0
     name = None
@@ -117,40 +119,6 @@ def count_pass(sam_file):
     
     
            
-    
-def count_fastq_length(infolder, outfolder, pattern = 'trimmed.fastq', 
-                      outfile = 'fastq_len.csv'):
-    """ Calculate the distribution of read length for fastq files in a folder"""
-    import os
-    from collections import defaultdict
-    fastq_len = {}
-    
-    fastqs = [filename for filename in os.listdir(infolder) if filename.endswith(pattern)]
-    for infile in fastqs:
-        i = 0    
-        fastq_len[infile] = defaultdict(int)
-        with open(os.path.join(infolder, infile), 'r') as fin:
-            for line in fin:
-                i += 1
-                if i % 4 == 2:
-                    fastq_len[infile][len(line.strip())] += 1
-    #return fastq_len   
-    rows = defaultdict(list)                
-    for filename in fastq_len.keys():
-        rows[filename].append(filename)
-        for readlength in sorted(fastq_len[filename].keys()):
-            rows[filename].append(fastq_len[filename][readlength])
-    rows = rows.values()   
-    rows.sort(key = lambda x: x[0])
-    rows = zip(*rows)
-    with open(os.path.join(outfolder, outfile), 'w') as fout:
-        #for k in sorted(row.keys()):
-         #   string = ','.join([str(num) for num in row[k]]) + '\n'       
-          #  fout.write(string)
-        for row in rows:
-            string = ','.join([str(num) for num in row]) + '\n' 
-            fout.write(string)
-            
 
 def fastq_trim_Ns(infile, outfile, random_NT_len=4):
     '''
