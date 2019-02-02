@@ -1,10 +1,9 @@
 # Test the code used for preprocessing fastq files
-import pytest
 import sys
+sys.path.append('/home/dinghai/dev/3-prime-READS-plus/modules')
+import pytest
 from pathlib import Path
 from subprocess import check_output
-
-sys.path.append('/home/dinghai/dev/3-prime-READS-plus/modules')
 import PASS
 
 def test_fastq_reader():
@@ -12,6 +11,7 @@ def test_fastq_reader():
     for i, fastq_record in enumerate(PASS.fastq_reader(infile, 6, 4)):
         if i == 1:
             assert fastq_record.randNT5 == 6
+            assert fastq_record.randNT3 == 4
             assert str(fastq_record) == "@NB500952:186:H35F2BGX5:1:11101:1487"\
                 + "5:1080 1:N:0:ATCACG\nTATCTCTTTTATTTTTTTTTTTTGAAGGGCAGATTTA"\
                     + "AAATACACTATTAAAATTATTAAATATTAAAAAACAACA\n+\nAAA/A/EEEE"\
