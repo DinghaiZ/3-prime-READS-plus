@@ -1,33 +1,36 @@
 # -*- coding: utf-8 -*-
-"""This module contains functions for identification and clustering of 
-PASS (Poly(A) Sequence Supporting) reads.
-"""
+'''This module contains functions for preprocessing fastq reads with long 5'
+T-stretches, identification of (unique) PASS (Poly(A) Sequence Supporting) reads 
+in sam files, clustering of PASS reads into pA sites, generation of QC reports, 
+and visualization of PASS reads on UCSC genome browser.
+'''
 
 import os
 import re
+from pathlib import Path
+from subprocess import check_output
 
 
-class Fastq(object):
-    """
-    Fastq record
-    """
+class Fastq():
+    '''Fastq record'''
+    # Accumulating read number
+    read_num = 0
+    # Length of random nucleotides at 5' end of the read
+    randNT5 = 0
+    # Length of random nucleotides at 3' end of the read
+    randNT3 = 0
+
     def __init__(self, name, seq, qual):
         self.name = name
         self.seq = seq
         self.qual = qual
-    
+        Fastq.read_num += 1
+
     def __str__(self):
-        return '\n'.join(['@%s' % str(self.name), self.seq, 
-            '+%s' % self.name, self.qual])
-    
-    def as_simple(self):
-        return '\n'.join(['@%s' % str(self.name), self.seq, '+', self.qual])
+        return '\n'.join(['@' + self.name, self.seq, '+', self.qual + '\n'])
     
     def get_name(self):
         return self.name
-    
-    def clean_name(self):
-        self.name = self.name.split(" ")[0]
     
     def get_seq(self):
         return self.seq
@@ -35,39 +38,99 @@ class Fastq(object):
     def get_qual(self):
         return self.qual
     
-    def get_ascii(self):
-        return map(ord, self.qual)
-    
     def get_length(self):
-        """Return length"""
+        '''Return length'''
         return len(self.seq)
 
-    def get_num_N(self, first=28):
-        """Return number of Ns"""
-        return self.seq.count('N', 0, first)
+    def trim_5p_Ts(self):
+        '''Trim random nucleotides and T-stretchs from the 5' of the reads. 
 
-    def set_name(self, name):
-        """Reset name"""
-        self.name = name
-    
-    def remove_tail_N(self):
-        """Remove N at the end"""
-        i = len(self.seq) - 1
-        while i >= 0:
-            if self.seq[i] == 'N':
-                i -= 1
-            else:
-                break
-        self.seq = self.seq[:i+1]
-        self.qual = self.qual[:i+1]
+        Uses a two-step trimming strategy to deal with sequencing errors in 
+        T-stretches. Information about the trimmed nucleotides are saved in the 
+        read name. 
+        
+        Example:
+
+        @NB500952:186:H35F2BGX5:1:11101:14875:1080 1:N:0:ATCACG
+        TATCTCTTTTATTTTTTTTTTTTGAAGGGCAGATTTAAAATACACTATTAAAATTATTAAATATTAAAAAA
+        CAACA
+        
+        becomes:
+
+        @TS17TATCTC::ATTTTTTTTTTTT:NB500952:186:H35F2BGX5:1:11101:14875:1080 1:
+        N:0:ATCACG
+        GAAGGGCAGATTTAAAATACACTATTAAAATTATTAAATATTAAAAAACAACA
+        
+        TS17: T-stretch length is 17. 
+        TATCTC: Random nucleotides
+        ATTTTTTTTTTTT: Potential genomic sequence that will be determined later
+        '''
+        # The first triming step is enough to process reads like
+        # "TATCTCTTTTTTTTTTTTTTTTTGAAGGGCAGATTTAAAATACACTATTAAAATTATTAA"
+        match1 = re.match('([ATCGN]{%d})(T*)' % self.randNT5, self.seq)
+        T_length1 = len(match1.groups()[1])
+        if T_length1 > 1:
+            self.seq = self.seq[match1.end():]
+            self.qual = self.qual[match1.end():]
+            self.name = ''.join(['TS', 
+                                 str(T_length1),
+                                 match1.groups()[0], 
+                                 ':', 
+                                 self.name
+								 ])
+
+        # The second trimming step is needed to deal with reads like
+        # "TATCTCTTTTATTTTTTTTTTTTGAAGGGCAGATTTAAAATACACTATTAAAATTATTAA"
+        if T_length1 > 2:
+            match2 = re.match('[ACGN](T+)', self.seq)
+            if match2:
+                T_length2 = len(match2.groups()[0])
+                if T_length2 > 2:
+                    self.seq = self.seq[match2.end():]
+                    self.qual = self.qual[match2.end():]
+                    T_length = T_length1 + 1 + T_length2
+                    # Attach the trimmed sequence to the read name
+                    # for comparison with genomic sequence later
+                    self.name = ''.join(['TS', 
+                                         str(T_length),
+                                         match1.groups()[0], 
+                                         '::',  
+                                         match2.group(0),
+                                         ':',
+                                         self.name[self.name.find(':')+1:]
+                                         ])
+
+    def trim_3p_Ns(self):
+        '''Trim randNT3 NT from 3' end if necessary.
+
+		Example:		
+
+		@HISEQ01:507:HBC1DADXX:1:1101:1222:2105 1:N:0:GTCCGC cutadapt    
+		AACTTTTGTTTTTTGACAGTCTCAAGTTTTTATTCAGTGGGTCTCTGTGTC
+		
+		becomes:
+		
+		@HISEQ01:507:HBC1DADXX:1:1101:1222:2105 1:N:0:GTCCGC <TGTC>
+		AACTTTTGTTTTTTGACAGTCTCAAGTTTTTATTCAGTGGGTCTCTG
+		'''
+		# Trim randNT3 NT from 3' end if the 5' RNA ligation adapter has been 
+		# removed
+        if re.search('cutadapt$', self.name):
+            self.name = self.name.replace('cutadapt', '<' \
+				                           + self.seq[-self.randNT3:] + '>')
+            self.seq = self.seq[:-self.randNT3]
+            self.qual = self.qual[:-self.randNT3]
 
 
-def fastq_reader(infile):
+def fastq_reader(infile, randNT5, randNT3):
     """Generator of Fastq object from a fastq or fastq.gz file"""
     i = 0
     name = None
     seq = None
     qual = None
+    Fastq.randNT5 = randNT5
+    Fastq.randNT3 = randNT3
+
     if infile.endswith('fastq.gz'):
         import gzip
         for line in gzip.open(infile, 'rb'):
@@ -79,7 +142,7 @@ def fastq_reader(infile):
                 seq = curr_line
             elif i % 4 == 0:
                 qual = curr_line
-                yield Fastq(name, seq, qual)
+                yield Fastq(name, seq, qual) 
     elif infile.endswith('.fastq'):
         for line in open(infile):
             i += 1
@@ -96,19 +159,19 @@ def fastq_reader(infile):
         raise FileNotFoundError     
 
 
-def count_fastq(fastq_file):
-    """Counts the number of fastq records in a fastq file"""
+""" def count_fastq(fastq_file):
+    '''Counts the number of fastq records in a fastq file'''
     from subprocess import check_output
     cmd = 'wc -l ' + fastq_file   
     cmd_out = check_output(cmd, shell=True)
     count = str(cmd_out).split('\'')[1].split(' ')[0]
     count = int(count)//4
     sample_name = fastq_file.split('/')[-1].split('.')[0]
-    return (sample_name, count)
+    return (sample_name, count) """
 
 
-def count_pass(sam_file):
-    """Counts the number of pass or nonpass records in a sam file"""
+""" def count_pass(sam_file):
+    '''Counts the number of pass or nonpass records in a sam file'''
     from subprocess import check_output
     # Skip header 
     cmd = 'grep -v @ ' + sam_file + ' | wc -l' 
@@ -116,192 +179,10 @@ def count_pass(sam_file):
     count = int(str(cmd_out).split('\'')[1].strip('\\n')) 
     sample_name = sam_file.split('/')[-1].split('.')[0]
     return (sample_name, count)
-    
-    
-           
+  """   
 
-def fastq_trim_Ns(infile, outfile, random_NT_len=4):
-    '''
-    If the 3' end of the read has been trimmed by cutadapt to remove the 3' end
-    of the 5' adapter, trim the last 4 random nucleotides from the 5' adapter 
-    and save them in the read name.  
-    
-    @HISEQ01:507:HBC1DADXX:1:1101:1222:2105 1:N:0:GTCCGC cutadapt    
-    AACTTTTGTTTTTTGACAGTCTCAAGTTTTTATTCAGTGGGTCTCTGTGTC
-    becomes:
-    @HISEQ01:507:HBC1DADXX:1:1101:1222:2105 1:N:0:GTCCGC TGTC
-    AACTTTTGTTTTTTGACAGTCTCAAGTTTTTATTCAGTGGGTCTCTG
-    '''
-    import re
-    #pattern = re.compile('([ATCGN]{%d})$'% random_NT_len)#precompile
-    with open(outfile, 'w') as outhandle:
-        for fq in reader_fastq(infile):
-            name = fq.get_name()
-            seq = fq.get_seq()
-            qual = fq.get_qual()
-            
-            # trim 4N from 3' end if the 5' adapter (for reverse sequencing) has been removed
-            if re.search('cutadapt$', name):
-                name = name.replace('cutadapt', '4N' + seq[-random_NT_len:] + '4N')
-                seq = seq[:-random_NT_len]
-                qual = qual[:-random_NT_len]
-                                                  
-            # Only keep the remaining sequence if its length is >= 18 nt
-            if len(seq) >= 18:
-                outhandle.write('\n'.join([name, seq, '+', qual]) + '\n')
-                
-
-
-
-
-def fastq_trim_Ts_2(infile, random_NT_len=3):
-    '''
-    Trim the first random nucleotides from 3' adapter and save them in the read
-    name. Also trim 5'Ts and save the number of 5' Ts in the read name. 
-    Use a two-step trimming strategy to deal with sequencing errors in T-stretches.
-    TTTTGTTVNNNN will become VNNNN. The GTT sequence will be attached to the end 
-    of the read name after ::, which will be compared with genomic sequence 
-    downstream of the LAP. For example:
-
-    @HISEQ01:507:HBC1DADXX:1:1101:1222:2105 1:N:0:GTCCGC    
-    AACTTTTGTTTTTTGACAGTCTCAAGTTTTTATTCAGTGGGTCTCTGTGTC
-    
-    becomes:
-    
-    @TS11AAC:507:HBC1DADXX:1:1101:1243:2103 1:N:0:GTCCGC
-    GACAGTCTCAAGTTTTTATTCAGTGGGTCTCTGTGTC
-    TS11: T-stretch length is 11; AAC: the three random nucleotide is AAC
-
-    '''
-    import re
-    pattern = re.compile('([ATCGN]{%d})(T*)' % random_NT_len)  # precompile
-    outfile = infile.replace('.fastq', '.trimmed.fastq')
-    with open(outfile, 'w') as outhandle:
-        for fq in reader_fastq(infile):
-            seq = fq.get_seq()
-            qual = fq.get_qual()
-
-            match1 = re.match(pattern, seq)
-            seq = seq[match1.end():]
-            qual = qual[match1.end():]
-            T_length1 = len(match1.groups()[1])
-            read_name = ''.join(['@TS', str(T_length1),
-                                 match1.groups()[0], fq.get_name()[7:]])
-
-            # The second step deal with reads like
-            # TTTTTGTTTTTTTCCAGTTGTCAAATGATCCTTTAT
-            match2 = re.match('[ACGN](T+)', seq)
-            if match2:
-                T_length2 = len(match2.groups()[0])
-                if T_length2 > 2 and (T_length1 + T_length2) > 5:
-                    seq = seq[match2.end():]
-                    qual = qual[match2.end():]
-                    T_length1 = T_length1 + 1 + T_length2
-                    # attach the trimmed sequence to the read name
-                    # the sequence will be compared with genomic sequence later
-                    read_name = ''.join(['@TS', str(T_length1),
-                                         match1.groups()[0], '::',  match2.group(0)])
-                    #read_name = read_name + '::' + match2.group(0)
-
-            # Only keep the remaining sequence if its length is >= 18 nt
-            if len(seq) >= 18:
-                outhandle.write('\n'.join([read_name, seq, '+', qual]) + '\n')
-    os.system('rm ' + infile)               
-
-
-def fastqgz_trim_Ts(infile, outfile, random_NT_len=3):
-    '''
-    Similar to gastq_trim_Ts(), but read and write .gz files
-    
-    '''
-    import re
-    import gzip
-    pattern = re.compile('([ATCGN]{%d})(T*)'% random_NT_len)#precompile
-    with gzip.open(outfile, 'wb') as outhandle:
-        for fq in reader_fastq(infile):
-            seq = fq.get_seq()
-            qual = fq.get_qual()
-            
-            match1 = re.match(pattern,seq)
-            seq = seq[match1.end():]
-            qual = qual[match1.end():]
-            T_length1 = len(match1.groups()[1])
-            #read_name = '@'+fq.get_name()+' TS:'+str(match.end() - random_NT_len)
-            read_name = ''.join(['@TS', str(T_length1),
-                                match1.groups()[0], fq.get_name()[7:]])
-            
-            # The second step deal with reads like TTTTTGTTTTTTTCCAGTTGTCAAATGATCCTTTAT
-            match2 = re.match('[ACGN](T+)',seq)
-            if match2:
-                T_length2 = len(match2.groups()[0])
-                if T_length2 > 2: #and (T_length1 + T_length2) > 5:
-                    seq = seq[match2.end():]
-                    qual = qual[match2.end():]
-                    T_length1 = T_length1 + 1 + T_length2
-                    # attach the trimmed sequence to the read name
-                    # the sequence will be compared with genomic sequence later
-                    read_name = ''.join(['@TS', str(T_length1),
-                                match1.groups()[0], '::',  match2.group(0)])
-                    #read_name = read_name + '::' + match2.group(0)
-                                      
-            # Only keep the remaining sequence if its length is >= 15 nt
-            if len(seq) >= 15:
-                outhandle.write('\n'.join([read_name, seq, '+', qual]) + '\n')
-            
-
-def fastq_trim_As(infile, outfile, random_NT_len=0):
-    '''
-    Trim the first random nucleotides from 3' adapter and save them in the read
-    name. Also trim 3'As and save the number of 3' As in the sequence name. 
-    Use a two-step trimming strategy to deal with sequencing errors in T-stretches.
-    TTTTGTTVNNNN will become VNNNN. The GTT sequence will be attached to the end 
-    of the read name after ::, which will be compared with genomic sequence 
-    downstream of the LAP.
-    
-    @HISEQ01:507:HBC1DADXX:1:1101:1222:2105 1:N:0:GTCCGC    
-    AACTTTTGTTTTTTGACAGTCTCAAGTTTTTATTCAGTGGGTCTCTGTGTC
-    becomes:
-    @TS11AAC:507:HBC1DADXX:1:1101:1243:2103 1:N:0:GTCCGC
-    GACAGTCTCAAGTTTTTATTCAGTGGGTCTCTGTGTC
-    TS11: T-stretch length is 11; AAC: the three random nucleotide is AAC
-    
-    '''
-    import re
-    pattern = re.compile('([ATCGN]{%d})(A*)$'% random_NT_len)#precompile
-    with open(outfile, 'w') as outhandle:
-        for fq in reader_fastq(infile):
-            seq = fq.get_seq()
-            qual = fq.get_qual()
-            
-            match1 = re.search(pattern,seq)
-            seq = seq[:match1.start()]
-            qual = qual[:match1.start()]
-            T_length1 = len(match1.groups()[1]) 
-            read_name = ''.join(['@TS', str(T_length1),
-                                match1.groups()[0]]) # , fq.get_name()[7:] deleted
-            
-            # The second step deal with reads like TTTTTGTTTTTTTCCAGTTGTCAAATGATCCTTTAT
-            match2 = re.search('[ACGN](A+)',seq)
-            if match2:
-                T_length2 = len(match2.groups()[0])
-                if T_length2 > 2 and (T_length1 + T_length2) > 5:
-                    seq = seq[:match1.start()]
-                    qual = qual[:match1.start()]
-                    T_length1 = T_length1 + 1 + T_length2
-                    # attach the trimmed sequence to the read name
-                    # the sequence will be compared with genomic sequence later
-                    read_name = ''.join(['@TS', str(T_length1),
-                                match1.groups()[0], '::',  match2.group(0)])
-                    #read_name = read_name + '::' + match2.group(0)
-                                      
-            # Only keep the remaining sequence if its length is >= 18 nt
-            if len(seq) >= 18:
-                outhandle.write('\n'.join([read_name, seq, '+', qual]) + '\n')            
-
-
-def load_fasta_genome(genome_dir = '/HPCTMP_NOBKUP/wl314/data/ucsc/genomes/mm9'):
-    '''
-    Read specified genomic sequence saved in genome_dir into a dict.
+def load_fasta_genome(genome_dir):
+    '''Read fasta files containing genomic sequence from genome_dir into a dict.
     '''
     fasta_files = os.listdir(genome_dir)
     fasta_files = [x for x in fasta_files if re.search('^chr.+fa$',x)]
@@ -315,451 +196,39 @@ def load_fasta_genome(genome_dir = '/HPCTMP_NOBKUP/wl314/data/ucsc/genomes/mm9')
             genome[fasta_file.replace('.fa', '')] = line.replace('\n', '')
     return genome
     
-
-def load_fasta_genome_2(genome_dir = '/HPCTMP_NOBKUP/wl314/data/ucsc/genomes/mm9'):
-    '''
-    Read specified genomic sequence saved in genome_dir into a dict in shared memory.
-    '''
-    from multiprocessing import Manager
-    m = Manager()
-    
-    genome = m.dict() #compare with genome = {}: not in shared memory
-    
-    fasta_files = os.listdir(genome_dir)
-    fasta_files = [x for x in fasta_files if re.search('^chr.+fa$',x)]
-    # !du -ch {genome_dir+'/ch*fa'}|grep total # total size of these files
-    
-    for fasta_file in fasta_files:
-        #print('Loading ', fasta_file)
-        with open(os.path.join(genome_dir, fasta_file), 'r') as f:
-            f.readline()#skip the first line
-            line = f.read() #much faster than looping through lines!
-            genome[fasta_file.replace('.fa', '')] = line.replace('\n', '')
-    return genome
-    
-        
+       
 def reverse_complement(seq, mol_type = 'DNA'):
-    #genomic sequence is a mixture of lower and upper cases    
+    '''Get reverse complement of seq.'''
+	# Genomic sequence contains both lower and upper cases    
     seq = seq.upper()
     if mol_type == 'DNA':
         complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N'}
     elif mol_type == 'RNA':
         complement = {'A': 'U', 'C': 'G', 'G': 'C', 'U': 'A', 'N': 'N'}
-    reverse_complement = "".join(complement.get(base) \
-    for base in reversed(seq))
+    reverse_complement = "".join(complement.get(base) for base in reversed(seq))
     return reverse_complement
     
 
-def complement(seq, mol_type = 'DNA'):
-    #genomic sequence is a mixture of lower and upper cases    
-    seq = seq.upper()
-    if mol_type == 'DNA':
-        complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N'}
-    elif mol_type == 'RNA':
-        complement = {'A': 'U', 'C': 'G', 'G': 'C', 'U': 'A', 'N': 'N'}
-    new = "".join(complement.get(base) for base in seq)
-    return new
-
-
 def get_seq(chromosome, strand, start, end, genome):
-    '''Get the genomic sequence specified. 'genome' is a dict.
-    Reverse strand sequence is reversecomplemented.'''
-    # get the sequence
-    seq = genome[chromosome][(start-1) : end].upper() #genomic sequence is a mixture of lower and upper cases!!!
-    
-    # reverse complement if strand is '-'
+    '''Get stranded genomic sequence from 'genome' (a dict).'''
+    seq = genome[chromosome][(start-1) : end].upper() 
     if strand == '-':
         seq = reverse_complement(seq, mol_type = 'DNA')
     return seq
     
-        
-def pick_PASS(sam_in, sam_pass, sam_nopass, sam_ref, genome, 
-              min_mapq = 10, direction = 'reverse'):
-    '''Loop through records in the sam_in file, if the record is PASS, write to
-    sam_pass. Mapped non-PASS reads are saved in sam_nopass. Reads mapped to 
-    yeast genome are skipped. "genome" is a dict.  Sequencing direction can only 
-    be reverse or forward. sam_ref is the file for spike-in reads. 
-    Attach matched tail length (ML), unmatched tail length (UL), and last mapped
-    position (LM) to the end of readname. The head (such as 'TS11AAC') and the 
-    tail (such as 'ML:i:4\tUL:i:9\tLM:i:1234') of the read name is the unique 
-    identifier of the read.'''
+     
+def pick_PASS(sam_file, min_mapq=10,  direction='reverse'):
+    '''Split sam_file into PASS, noPASS, and yeast (spike-in) sam files.
 
-    sam_pass_file = open(sam_pass, 'w')
-    sam_nopass_file = open(sam_nopass, 'w')
-    sam_ref_file = open(sam_ref, 'w')
-    lap = 0
-            
-    with open(sam_in, 'r') as sam_in_file:
-        for line in sam_in_file:
-            # skip header
-            if line[0] == '@': 
-                sam_pass_file.write(line)
-                sam_nopass_file.write(line)
-                sam_ref_file.write(line)
-                continue
-            #process each line
-            #print(line)
-            (readname, flag, chromosome, position, mapq, cigar) = \
-            line.split()[:6]
-            
-            position = int(position)
-            mapq = int(mapq)
-            
-            # discard reads with low mapping scores
-            if mapq < min_mapq: 
-                continue             
-            # record reads mapped to yeast genome
-            if chromosome[:4] == 'ychr': #or chromosome[:4] == 'BK000964': #rRNA 
-                sam_ref_file.write(line)
-                continue       
-            # ignore reads mapped to other chromosomes, such as 'BK000964'
-            if not chromosome[:3] == 'chr': 
-                continue  
-            
-                       
-            # extract the T-stretch length encoded in the readname
-            t_stretch_len = int(re.match('TS(\d+)', line).groups()[0])
-            # skip records with short T-stretches
-            if t_stretch_len < 2: 
-                sam_nopass_file.write(line)
-                continue
-            
-            # get genomic sequence downstream of the LAP (last mapped position). 
-            # (The length of returned sequence is t_stretch_len.)
-            if (direction.lower() == 'reverse' and flag == '16') or \
-            (direction.lower() == 'forward' and flag == '0'): 
-                strand = '+'
-                # process cigar to determine the LAP
-                # Insertion (I) will not affect the covered distance
-                # if cigar = '38M10S' or '38', nums will be 38
-                nums = re.split('[MDN]', re.sub('\d+I','', cigar))[:-1]
-                covered =  sum(int(x) for x in nums)
-                # get_seq() returns reverse complemented sequence if strand == '-'
-                downstream_seq = get_seq(chromosome, strand, 
-                start = position + covered, 
-                end = position + covered + t_stretch_len - 1, 
-                genome = genome)
-                lap = position + covered -1
-            elif (direction.lower() == 'reverse' and flag == '0') or \
-            (direction.lower() == 'forward' and flag == '16'):
-                strand = '-'
-                downstream_seq = get_seq(chromosome, strand, 
-                start = position - t_stretch_len, end = position -1, 
-                genome = genome)     
-                lap = position
-            else:
-                continue 
-
-            # if the 5' T-stretch was trimmed twice (like 'TTTTTTTGTTTT'), 
-            # check whether 'GTTTT' comes from the genome           
-            #match = re.match('[ACG](T*)', readname.split('::')[-1])
-            elements = readname.split('::')            
-            if len(elements) == 2 and re.match(reverse_complement(elements[1]), 
-                                              downstream_seq):
-                downstream_seq = downstream_seq[len(elements[1]):]
-                t_stretch_len -= len(elements[1]) 
-                if strand == '+': 
-                    lap += len(elements[1])
-                if strand == '-':
-                    lap -= len(elements[1])
-            
-            # no need to analyze downstream sequence        
-            if t_stretch_len == 0:
-                sam_nopass_file.write(line.strip()+'\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
-                %(len(elements[1]), 0, lap))
-                continue
-                        
-            # analyze downstream sequence
-            if not downstream_seq[:-1] == 'A'*(t_stretch_len-1):                
-                match = re.match('A+', downstream_seq)
-                if match: 
-                    matched_len = len(match.group())
-                else: 
-                    matched_len = 0
-                # attach matched length (ML) and unmatched length (UL) to readname
-                # t_stretch_len - matched_len could be 1 for the few reads mapped 
-                # to the end of chromosome.
-                sam_pass_file.write(line.strip()+'\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
-                %(matched_len, t_stretch_len - matched_len, lap))                
-            else:                           
-                match = re.match('A*', downstream_seq) 
-                matched_len = len(match.group())# value: 1 ~ t_stretch_len
-                #nopass_aligned_tail_len.append(len(match.group()))
-                # attach matched length (ML) and unmatched length (UL) to readname
-                sam_nopass_file.write(line.strip()+'\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
-                %(matched_len, t_stretch_len - matched_len, lap))                 
-
-    sam_pass_file.close() 
-    sam_nopass_file.close() 
-    sam_ref_file.close()
-
-
-def pick_PASS_2(sam_file, genome, min_mapq = 10,  direction = 'reverse'):
-    """
     Loop through records in the sam file, if the record is PASS, write to
     sam_pass. Mapped non-PASS reads are saved in sam_nopass. Reads mapped to 
-    yeast genome are skipped. "genome" is a dict.  Sequencing direction can only 
-    be reverse or forward. sam_ref is the file for spike-in reads. 
+    rRNA genes are skipped. Sequencing direction can only be reverse or forward. 
+
     Attach matched tail length (ML), unmatched tail length (UL), and last mapped
     position (LM) to the end of readname. The head (such as 'TS11AAC') and the 
     tail (such as 'ML:i:4\tUL:i:9\tLM:i:1234') of the read name is the unique 
     identifier of the read.
-    """
-    
-    sam_pass = sam_file.replace('.sam', '.pass')
-    sam_nopass = sam_file.replace('.sam', '.nopass')
-    sam_ref = sam_file.replace('.sam', '.ref')
-    
-    sam_pass_file = open(sam_pass, 'w')
-    sam_nopass_file = open(sam_nopass, 'w')
-    sam_ref_file = open(sam_ref, 'w')
-    lap = 0
-            
-    with open(sam_file, 'r') as in_file:
-        for line in in_file:
-            # skip header
-            if line[0] == '@': 
-                sam_pass_file.write(line)
-                sam_nopass_file.write(line)
-                sam_ref_file.write(line)
-                continue
-            #process each line
-            #print(line)
-            # line = 'TS14AAG2:51:HYFCNBGXX:2:11111:21123:6214        16      chr3    126547771       255     59M     *       0       0       CGTAAGGGTAAATGACTGATTGATATATTTACGCGTTAATAAATTTGTGATTTCTGCTG     /A/E///E/EE<A//A//</<///E//AE/E///EA/EE/EEAEE<</<AEE///EEE6     NH:i:1  HI:i:1  AS:i:52 nM:i:3'
-            (readname, flag, chromosome, position, mapq, cigar) = \
-            line.split()[:6]
-            
-            position = int(position)
-            mapq = int(mapq)
-            
-            # discard reads with low mapping scores
-            if mapq < min_mapq: 
-                continue             
-            # record reads mapped to yeast genome
-            if chromosome[:4] == 'ychr': #or chromosome[:4] == 'BK000964': #rRNA 
-                sam_ref_file.write(line)
-                continue       
-            # ignore reads mapped to other chromosomes, such as 'BK000964'
-            if not chromosome[:3] == 'chr': 
-                continue  
-            
-                       
-            # extract the T-stretch length encoded in the readname
-            t_stretch_len = int(re.match('TS(\d+)', line).groups()[0])
-            # skip records with short T-stretches
-            if t_stretch_len < 2: 
-                sam_nopass_file.write(line)
-                continue
-            
-            # get genomic sequence downstream of the LAP (last mapped position). 
-            # (The length of returned sequence is t_stretch_len.)
-            if (direction.lower() == 'reverse' and flag == '16') or \
-            (direction.lower() == 'forward' and flag == '0'): 
-                strand = '+'
-                # process cigar to determine the LAP
-                # Insertion (I) will not affect the covered distance
-                # if cigar = '38M10S' or '38', nums will be 38
-                nums = re.split('[MDN]', re.sub('\d+I','', cigar))[:-1]
-                covered =  sum(int(x) for x in nums)
-                # get_seq() returns reverse complemented sequence if strand == '-'
-                downstream_seq = get_seq(chromosome, strand, 
-                start = position + covered, 
-                end = position + covered + t_stretch_len - 1, 
-                genome = genome)
-                lap = position + covered -1
-            elif (direction.lower() == 'reverse' and flag == '0') or \
-            (direction.lower() == 'forward' and flag == '16'):
-                strand = '-'
-                downstream_seq = get_seq(chromosome, strand, 
-                start = position - t_stretch_len, end = position -1, 
-                genome = genome)     
-                lap = position
-            else:
-                continue 
-
-            # if the 5' T-stretch was trimmed twice (like 'TTTTTTTGTTTT'), 
-            # check whether 'GTTTT' comes from the genome           
-            #match = re.match('[ACG](T*)', readname.split('::')[-1])
-            elements = readname.split('::')            
-            if len(elements) == 2 and re.match(reverse_complement(elements[1]), 
-                                              downstream_seq):
-                downstream_seq = downstream_seq[len(elements[1]):]
-                t_stretch_len -= len(elements[1]) 
-                if strand == '+': 
-                    lap += len(elements[1])
-                if strand == '-':
-                    lap -= len(elements[1])
-            
-            # no need to analyze downstream sequence        
-            if t_stretch_len == 0:
-                sam_nopass_file.write(line.strip()+'\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
-                %(len(elements[1]), 0, lap))
-                continue
-                        
-            # analyze downstream sequence
-            if not downstream_seq[:-1] == 'A'*(t_stretch_len-1):                
-                match = re.match('A+', downstream_seq)
-                if match: 
-                    matched_len = len(match.group())
-                else: 
-                    matched_len = 0
-                # attach matched length (ML) and unmatched length (UL) to readname
-                # t_stretch_len - matched_len could be 1 for the few reads mapped 
-                # to the end of chromosome.
-                sam_pass_file.write(line.strip()+'\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
-                %(matched_len, t_stretch_len - matched_len, lap))                
-            else:                           
-                match = re.match('A*', downstream_seq) 
-                matched_len = len(match.group())# value: 1 ~ t_stretch_len
-                #nopass_aligned_tail_len.append(len(match.group()))
-                # attach matched length (ML) and unmatched length (UL) to readname
-                sam_nopass_file.write(line.strip()+'\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
-                %(matched_len, t_stretch_len - matched_len, lap))                 
-
-    sam_pass_file.close() 
-    sam_nopass_file.close() 
-    sam_ref_file.close()
-    
-
-def pick_PASS_3(sam_file, genome, min_mapq = 10,  direction = 'reverse'):
-    """
-    Loop through records in the sam file, if the record is PASS, write to
-    sam_pass. Mapped non-PASS reads are saved in sam_nopass. Reads mapped to 
-    yeast genome are skipped. "genome" is a dict.  Sequencing direction can only 
-    be reverse or forward. sam_ref is the file for spike-in reads. 
-    Attach matched tail length (ML), unmatched tail length (UL), and last mapped
-    position (LM) to the end of readname. The head (such as 'TS11AAC') and the 
-    tail (such as 'ML:i:4\tUL:i:9\tLM:i:1234') of the read name is the unique 
-    identifier of the read.
-    """
-    
-    sam_pass = sam_file.replace('.sam', '.pass')
-    sam_nopass = sam_file.replace('.sam', '.nopass')
-    sam_ref = sam_file.replace('.sam', '.ref')
-    
-    sam_pass_file = open(sam_pass, 'w')
-    sam_nopass_file = open(sam_nopass, 'w')
-    sam_ref_file = open(sam_ref, 'w')
-    lap = 0
-            
-    with open(sam_file, 'r') as in_file:
-        lines = in_file.read().splitlines()  ### faster then pick_PASS_2()?
-        for line in lines:
-            # skip header
-            if line[0] == '@': 
-                sam_pass_file.write(line)
-                sam_nopass_file.write(line)
-                sam_ref_file.write(line)
-                continue
-            #process each line
-            #print(line)
-            # line = 'TS14AAG2:51:HYFCNBGXX:2:11111:21123:6214        16      chr3    126547771       255     59M     *       0       0       CGTAAGGGTAAATGACTGATTGATATATTTACGCGTTAATAAATTTGTGATTTCTGCTG     /A/E///E/EE<A//A//</<///E//AE/E///EA/EE/EEAEE<</<AEE///EEE6     NH:i:1  HI:i:1  AS:i:52 nM:i:3'
-            (readname, flag, chromosome, position, mapq, cigar) = \
-            line.split()[:6]
-            
-            position = int(position)
-            mapq = int(mapq)
-            
-            # discard reads with low mapping scores
-            if mapq < min_mapq: 
-                continue             
-            # record reads mapped to yeast genome
-            if chromosome[:4] == 'ychr': #or chromosome[:4] == 'BK000964': #rRNA 
-                sam_ref_file.write(line)
-                continue       
-            # ignore reads mapped to other chromosomes, such as 'BK000964'
-            if not chromosome[:3] == 'chr': 
-                continue  
-            
-                       
-            # extract the T-stretch length encoded in the readname
-            t_stretch_len = int(re.match('TS(\d+)', line).groups()[0])
-            # skip records with short T-stretches
-            if t_stretch_len < 2: 
-                sam_nopass_file.write(line)
-                continue
-            
-            # get genomic sequence downstream of the LAP (last mapped position). 
-            # (The length of returned sequence is t_stretch_len.)
-            if (direction.lower() == 'reverse' and flag == '16') or \
-            (direction.lower() == 'forward' and flag == '0'): 
-                strand = '+'
-                # process cigar to determine the LAP
-                # Insertion (I) will not affect the covered distance
-                # if cigar = '38M10S' or '38', nums will be 38
-                nums = re.split('[MDN]', re.sub('\d+I','', cigar))[:-1]
-                covered =  sum(int(x) for x in nums)
-                # get_seq() returns reverse complemented sequence if strand == '-'
-                downstream_seq = get_seq(chromosome, strand, 
-                start = position + covered, 
-                end = position + covered + t_stretch_len - 1, 
-                genome = genome)
-                lap = position + covered -1
-            elif (direction.lower() == 'reverse' and flag == '0') or \
-            (direction.lower() == 'forward' and flag == '16'):
-                strand = '-'
-                downstream_seq = get_seq(chromosome, strand, 
-                start = position - t_stretch_len, end = position -1, 
-                genome = genome)     
-                lap = position
-            else:
-                continue 
-
-            # if the 5' T-stretch was trimmed twice (like 'TTTTTTTGTTTT'), 
-            # check whether 'GTTTT' comes from the genome           
-            #match = re.match('[ACG](T*)', readname.split('::')[-1])
-            elements = readname.split('::')            
-            if len(elements) == 2 and re.match(reverse_complement(elements[1]), 
-                                              downstream_seq):
-                downstream_seq = downstream_seq[len(elements[1]):]
-                t_stretch_len -= len(elements[1]) 
-                if strand == '+': 
-                    lap += len(elements[1])
-                if strand == '-':
-                    lap -= len(elements[1])
-            
-            # no need to analyze downstream sequence        
-            if t_stretch_len == 0:
-                sam_nopass_file.write(line.strip()+'\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
-                %(len(elements[1]), 0, lap))
-                continue
-                        
-            # analyze downstream sequence
-            if not downstream_seq[:-1] == 'A'*(t_stretch_len-1):                
-                match = re.match('A+', downstream_seq)
-                if match: 
-                    matched_len = len(match.group())
-                else: 
-                    matched_len = 0
-                # attach matched length (ML) and unmatched length (UL) to readname
-                # t_stretch_len - matched_len could be 1 for the few reads mapped 
-                # to the end of chromosome.
-                sam_pass_file.write(line.strip()+'\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
-                %(matched_len, t_stretch_len - matched_len, lap))                
-            else:                           
-                match = re.match('A*', downstream_seq) 
-                matched_len = len(match.group())# value: 1 ~ t_stretch_len
-                #nopass_aligned_tail_len.append(len(match.group()))
-                # attach matched length (ML) and unmatched length (UL) to readname
-                sam_nopass_file.write(line.strip()+'\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
-                %(matched_len, t_stretch_len - matched_len, lap))                 
-
-    sam_pass_file.close() 
-    sam_nopass_file.close() 
-    sam_ref_file.close()    
-    
-    
-def pick_PASS_4(sam_file, min_mapq=10,  direction='reverse'):
-    """
-    Loop through records in the sam file, if the record is PASS, write to
-    sam_pass. Mapped non-PASS reads are saved in sam_nopass. Reads mapped to 
-    yeast genome are skipped. "genome" is a dict.  Sequencing direction can only 
-    be reverse or forward. sam_ref is the file for spike-in reads. 
-    Attach matched tail length (ML), unmatched tail length (UL), and last mapped
-    position (LM) to the end of readname. The head (such as 'TS11AAC') and the 
-    tail (such as 'ML:i:4\tUL:i:9\tLM:i:1234') of the read name is the unique 
-    identifier of the read.
-    """
+    '''
 
     sam_pass = sam_file.replace('.sam', '.pass')
     sam_nopass = sam_file.replace('.sam', '.nopass')
@@ -877,112 +346,9 @@ def pick_PASS_4(sam_file, min_mapq=10,  direction='reverse'):
     sam_nopass_file.close()
     sam_ref_file.close()
     os.system('rm ' + sam_file)    
-    
 
-    
-def count_pass_in_folder(pass_dir, outfolder,  
-                          outfile = 'pass_num.csv'):
-    '''Count number of pass and nonpass reads in sam files in the pass_dir'''
-    from subprocess import check_output
-    import glob
-    
-    sample_names = []
-    pass_nums = [] 
-    nonpass_nums = [] 
-    ref_nums = []
-    
-    # count pass reads 
-    for file_name in sorted(glob.glob(os.path.join(pass_dir, '*.pass.sam'))):
-        sample_names.append(file_name.split('/')[-1].split('.')[0])
-        cmd = 'grep -v @ ' + file_name + ' | wc -l'
-        cmd_out = check_output(cmd, shell=True)
-        pass_nums.append(cmd_out.strip())
-    
-    # count nonpass reads 
-    for file_name in sorted(glob.glob(os.path.join(pass_dir, '*.nopass.sam'))):
-        cmd = 'grep -v @ ' + file_name + ' | wc -l'
-        cmd_out = check_output(cmd, shell=True)
-        nonpass_nums.append(cmd_out.strip())
-    
-    # count reference reads 
-    for file_name in sorted(glob.glob(os.path.join(pass_dir, '*.ref.sam'))):
-        cmd = 'grep -v @ ' + file_name + ' | wc -l'
-        cmd_out = check_output(cmd, shell=True)
-        ref_nums.append(cmd_out.strip())
-    
-    # combine
-    records = zip(sample_names, pass_nums, nonpass_nums, ref_nums)
-    with open(outfolder+'/' + outfile, 'w') as f:
-        f.write('Sample, PASS, nonPASS, Ref\n')
-        for rec in records:
-            f.write('%s,%s,%s,%s\n' % rec)
-            
-            
-def count_5Ts_in_folder_2(pass_dir, result_dir):
-    '''Count the number of reads with certain 5'T-stretch lengths for pass and 
-    nopass reads in files in the pass_dir.'''
-    file_names = []
-    results = [] #container                     
-    
-    import re
-    import numpy as np
-    import pandas as pd
-    
-    for sam_file in [filename for filename in os.listdir(pass_dir) \
-    if re.search('Aligned.out.(no)?pass$', filename)]:
-        sam_in = os.path.join(pass_dir, sam_file)    
-        sam_file = sam_file.split('.')[0] + '.' + sam_file.split('.')[-1]
-        file_names.append(sam_file)  
-        
-        with open(sam_in, 'r') as f:
-            string = f.read()
-            # search patterns in the file        
-            TS = re.findall('\nTS(\d+)', string) #5' t-strech
-            ML = re.findall('ML:i:(\d+)\t', string) # Mapped length
-            UL = re.findall('UL:i:(\d+)\t', string) # Unmapped length
-            # count number of patterns
-            TS = [TS.count(str(i)) for i in range(51)] #50 sequencing cycles
-            ML = [ML.count(str(i)) for i in range(51)]
-            UL = [UL.count(str(i)) for i in range(51)]
-            # save the result
-            # zip returns a generater in python3, so list() is necessary
-            results.append(list(zip(TS, ML, UL))) 
-    
-    # get TS, ML, and UL
-    
-    TS = []
-    for i in range(len(file_names)):
-        TS.append([row[0] for row in results[i]])   
-    out_file = os.path.join(result_dir, 'T-stretch_len_all.csv')
-    header = 'T_Stretch_Length,'+','.join(file_names)
-    TS = np.transpose(np.array(TS))
-    TS = np.insert(TS, 0, values = np.arange(51), axis = 1) #insert T length
-    np.savetxt(out_file, TS, header = header, delimiter=",")
-    TS = pd.DataFrame(data=TS, columns=['T_Stretch_Length'] + file_names)
-    
-    ML = []
-    for i in range(len(file_names)):
-        ML.append([row[1] for row in results[i]])
-    out_file = os.path.join(result_dir, 'T-stretch_len_algined.csv')
-    header = 'T_Stretch_Length,'+','.join(file_names)
-    ML = np.transpose(np.array(ML))
-    ML = np.insert(ML, 0, values = np.arange(51), axis = 1) #insert T length
-    np.savetxt(out_file, ML, header = header, delimiter=",")
-    TS = pd.DataFrame(data=ML, columns=['T_Stretch_Length'] + file_names)
-    
-    UL = []
-    for i in range(len(file_names)):
-        UL.append([row[2] for row in results[i]])
-    out_file = os.path.join(result_dir, 'T-stretch_len_unalgined.csv')
-    header = 'T_Stretch_Length,'+','.join(file_names)
-    UL = np.transpose(np.array(UL))
-    UL = np.insert(UL, 0, values = np.arange(51), axis = 1) #insert T length
-    np.savetxt(out_file, UL, header = header, delimiter=",")
-    TS = pd.DataFrame(data=UL, columns=['T_Stretch_Length'] + file_names)
-    
-    return(TS, ML, UL)
 
-def count_5Ts_in_folder_3(sam_dir):
+def count_5Ts_in_folder(sam_dir):
     '''
     Count the number of reads with certain 5'T-stretch lengths for pass and 
     nopass reads in files in the sam_dir. Return a DataFrame.
@@ -1075,41 +441,7 @@ def count_MAP_in_folder(pass_dir, result_dir, pattern = 'pass\.sam$',
 count_MAP_in_folder(pass_dir = '../data/batch2', result_dir = '../result/batch3', pattern = 'fastq\.sam$',
                         outfile = 'test.map.scores.csv')
 '''                        
-def select_unique_fragments(random_NT_len, infile, outfile):
-    '''Use the TS\d+[ATCG]{3} string in read name and chromosome, flag, and LM 
-    tags to identify potential PCR duplicates.'''
-    import itertools
-    # make a set to save unique ids    
-    unique_ids = set()
-    # precompile the search patter
-    pattern = re.compile('TS(\d+[ATCGN]{%s})'% random_NT_len)
-    fout = open(outfile, 'w')
-    # open infile, calculate the id
-    with open(infile, 'r') as fin:
-        print('Identifying uPASS in ' + infile)        
-        for line in fin:
-            if line[0] == '@':
-                fout.write(line)                
-                continue
-            #print(line)
-            # calculate the id for the read
-            l = line.split()
-            m = re.match(pattern, l[0])
-            # calculate read length
-            cigar = l[5]
-            nums = re.split('[MDN]', re.sub('\d+I','', cigar))[:-1]
-            covered =  sum(int(x) for x in nums)            
-            if m:
-                l = [m.group(1), l[1:3], l[-1][:-1], str(covered)]
-                # if 4N has been trimmed from 3' end
-                cutadapt = re.search('4N([ATCG]{4})4N', l[0])
-                if cutadapt:
-                    l.append(cutadapt.groups[0]) 
-                this_id = ''.join(list(itertools.chain(*l)))
-                # only copy the line if this_id has not been seen before
-                if not this_id in unique_ids:
-                    unique_ids.add(this_id)
-                    fout.write(line)
+
 
 def select_unique_fragments_2(input_file, random_NT_len):
     '''
