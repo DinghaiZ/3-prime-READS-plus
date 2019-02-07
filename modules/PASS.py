@@ -15,6 +15,8 @@ class Fastq():
     '''Fastq record'''
     # Accumulating read number
     read_num = 0
+    # Number of trimmed reads
+    trimmed_num = 0
     # Length of random nucleotides at 5' end of the read
     randNT5 = 0
     # Length of random nucleotides at 3' end of the read
@@ -39,7 +41,6 @@ class Fastq():
         return self.qual
     
     def get_length(self):
-        '''Return length'''
         return len(self.seq)
 
     def trim_5p_Ts(self):
@@ -78,6 +79,7 @@ class Fastq():
                                  ':', 
                                  self.name
 								 ])
+            Fastq.trimmed_num += 1
 
         # The second trimming step is needed to deal with reads like
         # "TATCTCTTTTATTTTTTTTTTTTGAAGGGCAGATTTAAAATACACTATTAAAATTATTAA"
@@ -180,17 +182,17 @@ def fastq_reader(infile, randNT5, randNT3):
     return (sample_name, count)
   """   
 
+
 def load_fasta_genome(genome_dir):
     '''Read fasta files containing genomic sequence from genome_dir into a dict.
     '''
-    fasta_files = os.listdir(genome_dir)
-    fasta_files = [x for x in fasta_files if re.search('^chr.+fa$',x)]
+    fasta_files = Path(genome_dir).glob('ch*.fa')
     genome = {}
     for fasta_file in fasta_files:
-        with open(os.path.join(genome_dir, fasta_file), 'r') as f:
+        with open(fasta_file, 'r') as f:
             f.readline()
             line = f.read()
-            genome[fasta_file.replace('.fa', '')] = line.replace('\n', '')
+            genome[str(fasta_file.name).replace('.fa', '')] = line.replace('\n', '')
     return genome
     
        
