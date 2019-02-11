@@ -43,15 +43,6 @@ def test_trim_5p_Ts():
                 "AAAAAEEEEAAEEEEEEE/E/E/A/E6E/AAE/E/</</AEE/6/////A<//<A////6/"\
                     + "//6/A</EEEAA/<6"
             assert fastq_record.trimmed_num == 0
-        # Trim once
-        if i == 2:
-            assert fastq_record.name == \
-                "TS16AACCAT:NB500952:186:H35F2BGX5:1:11101:13764:1083 1:N:0:ATCACG"
-            assert fastq_record.seq == \
-                "AAAAAAAAAATAAAAAATATTTTTAAAATTATAAATTTTTTTTTGTAAAATCAC"
-            assert fastq_record.qual == \
-                "EEEAEE/E///6AEE////A//<<6//66//6//66//66/6/6////////66"
-            assert fastq_record.trimmed_num == 2
         # Trim twice
         if i == 1:
             assert fastq_record.name == \
@@ -62,6 +53,16 @@ def test_trim_5p_Ts():
             assert fastq_record.qual == \
                 "AAE///E///E</EE/A/EE</6//6//<66//6//6//////<//6EE/6/6"
             assert fastq_record.trimmed_num == 1
+        # Trim once
+        if i == 2:
+            assert fastq_record.name == \
+                "TS16AACCAT:NB500952:186:H35F2BGX5:1:11101:13764:1083 1:N:0:ATCACG"
+            assert fastq_record.seq == \
+                "AAAAAAAAAATAAAAAATATTTTTAAAATTATAAATTTTTTTTTGTAAAATCAC"
+            assert fastq_record.qual == \
+                "EEEAEE/E///6AEE////A//<<6//66//6//66//66/6/6////////66"
+            assert fastq_record.trimmed_num == 2
+       
     print("\nTotal trimmed fastq reads: ", fastq_record.trimmed_num)
 
 
@@ -94,7 +95,6 @@ def test_genome_mm9(genome_mm9):
                         )
 def test_get_seq(chromosome, strand, start, end, genome_mm9, expected_output):
     seq = PASS.get_seq(chromosome, strand, start, end, genome_mm9) 
-    print(seq)
     assert seq == expected_output
 
 def test_pick_PASS():
