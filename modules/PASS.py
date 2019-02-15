@@ -12,7 +12,7 @@ from subprocess import check_output
 
 
 class Fastq():
-    '''Fastq record'''
+    '''Fastq record with a method to trim 5' T-stretches'''
     # Accumulating read number
     read_num = 0
     # Number of trimmed reads
@@ -132,19 +132,7 @@ def fastq_reader(infile, randNT5, randNT3):
     name = None
     seq = None
     qual = None
-    if infile.endswith('fastq.gz'):
-        import gzip
-        for line in gzip.open(infile, 'rb'):
-            i += 1
-            curr_line = line.strip()
-            if i % 4 == 1:
-                name = curr_line[1:]
-            elif i % 4 == 2:
-                seq = curr_line
-            elif i % 4 == 0:
-                qual = curr_line
-                yield Fastq(name, seq, qual) 
-    elif infile.endswith('.fastq'):
+    if infile.endswith('.fastq'):
         for line in open(infile):
             i += 1
             curr_line = line.strip()
@@ -156,10 +144,22 @@ def fastq_reader(infile, randNT5, randNT3):
                 qual = curr_line
                 yield Fastq(name, seq, qual)
     else:
-        print("Please provide a .fastq or .fastq.gz file.")
+        print("Please provide a .fastq file.")
         raise FileNotFoundError     
 
 
+def fastq_file_trimmer(infile, randNT5, randNT3):
+    '''Trims 5' T-stretches of fastq records in infile and write to a new file
+    '''
+    assert infile.endswith('.fastq') 
+    outfile = infile.replace('.fastq', '.trimmed.fastq') 
+    with open(outfile, 'w') as fout:
+        for fastq_record in PASS.fastq_reader(infile, randNT5, randNT3):
+            fastq_record.trim_5p_Ts()
+            if fastq_record.get_length >= 18:
+                fout.write(str(fastq_record))
+        return fastq_record.trimmed_num
+ 
 """ def count_fastq(fastq_file):
     '''Counts the number of fastq records in a fastq file'''
     from subprocess import check_output

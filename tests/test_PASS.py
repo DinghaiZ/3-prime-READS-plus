@@ -1,4 +1,4 @@
-# Test the code used for preprocessing fastq files
+# Test the code in PASS.py
 import sys
 sys.path.append('/home/dinghai/dev/3-prime-READS-plus/modules')
 import pytest
@@ -96,6 +96,13 @@ def test_genome_mm9(genome_mm9):
 def test_get_seq(chromosome, strand, start, end, genome_mm9, expected_output):
     seq = PASS.get_seq(chromosome, strand, start, end, genome_mm9) 
     assert seq == expected_output
+
+
+def test_fastq_file_trimmer(infile, randNT5, randNT3):
+    outfile = infile.replace('.fastq', '.trimmed.fastq') 
+    fastq_file_trimme(infile, randNT5, randNT3)
+    assert 0
+
 
 def test_pick_PASS():
     pass
