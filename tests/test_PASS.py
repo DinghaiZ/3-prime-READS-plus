@@ -6,6 +6,7 @@ from pathlib import Path
 from subprocess import check_output
 import PASS
 
+#@pytest.mark.skip()
 def test_fastq_reader():
     infile = "tests/data/rawfastq/siCtrl_1_small.fastq"
     for i, fastq_record in enumerate(PASS.fastq_reader(infile, 6, 4)):
@@ -78,11 +79,13 @@ def genome_mm9():
     print('\nmm9 genome unloaded')
 
 
+@pytest.mark.slow
 def test_genome_mm9(genome_mm9):
     assert isinstance(genome_mm9, dict)
     assert 'chr1' in genome_mm9.keys()
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('chromosome, strand, start, end, expected_output',
                          [
                              ('chr2', "+", 100000, 100020, 
@@ -98,11 +101,13 @@ def test_get_seq(chromosome, strand, start, end, genome_mm9, expected_output):
     assert seq == expected_output
 
 
-def test_fastq_file_trimmer(infile, randNT5, randNT3):
-    outfile = infile.replace('.fastq', '.trimmed.fastq') 
-    fastq_file_trimme(infile, randNT5, randNT3)
-    assert 0
-
+def test_fastq_file_trimmer():
+    infile = "tests/data/rawfastq/siCtrl_1_small.fastq"
+    randNT5 = 6
+    randNT3 = 4
+    read_num, trimmed_num = PASS.fastq_file_trimmer(infile, randNT5, randNT3)
+    assert read_num == 250
+    assert trimmed_num == 142
 
 def test_pick_PASS():
     pass

@@ -150,15 +150,15 @@ def fastq_reader(infile, randNT5, randNT3):
 
 def fastq_file_trimmer(infile, randNT5, randNT3):
     '''Trims 5' T-stretches of fastq records in infile and write to a new file
+    Returns total read number and (5' T-stretch) trimmed read number.
     '''
     assert infile.endswith('.fastq') 
     outfile = infile.replace('.fastq', '.trimmed.fastq') 
     with open(outfile, 'w') as fout:
-        for fastq_record in PASS.fastq_reader(infile, randNT5, randNT3):
+        for fastq_record in fastq_reader(infile, randNT5, randNT3):
             fastq_record.trim_5p_Ts()
-            if fastq_record.get_length >= 18:
-                fout.write(str(fastq_record))
-        return fastq_record.trimmed_num
+            fout.write(str(fastq_record))
+        return fastq_record.read_num, fastq_record.trimmed_num
  
 """ def count_fastq(fastq_file):
     '''Counts the number of fastq records in a fastq file'''
