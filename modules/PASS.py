@@ -11,22 +11,14 @@ from pathlib import Path
 from subprocess import check_output
 
 
-class Fastq():
+class FastqRecord():
     '''Fastq record with a method to trim 5' T-stretches'''
-    # Accumulating read number
-    read_num = 0
-    # Number of trimmed reads
-    trimmed_num = 0
-    # Length of random nucleotides at 5' end of the read
-    randNT5 = 0
-    # Length of random nucleotides at 3' end of the read
-    randNT3 = 0
-
     def __init__(self, name, seq, qual):
         self.name = name
         self.seq = seq
         self.qual = qual
-        Fastq.read_num += 1
+        self.trimmed5T = False
+        self.trimmed3NT = False
 
     def __str__(self):
         return '\n'.join(['@' + self.name, self.seq, '+', self.qual + '\n'])
@@ -43,7 +35,7 @@ class Fastq():
     def get_length(self):
         return len(self.seq)
 
-    def trim_5p_Ts(self):
+    def trim_5p_Ts(self, randNT5):
         '''Trim random nucleotides and T-stretchs from the 5' of the reads. 
 
         Uses a two-step trimming strategy to deal with sequencing errors in 
@@ -68,7 +60,7 @@ class Fastq():
         '''
         # The first triming step is enough to process reads like
         # "TATCTCTTTTTTTTTTTTTTTTTGAAGGGCAGATTTAAAATACACTATTAAAATTATTAA"
-        match1 = re.match('([ATCGN]{%d})(T*)' % self.randNT5, self.seq)
+        match1 = re.match('([ATCGN]{%d})(T*)' % randNT5, self.seq)
         T_length1 = len(match1.groups()[1])
         if T_length1 > 1:
             self.seq = self.seq[match1.end():]
@@ -79,7 +71,7 @@ class Fastq():
                                  ':', 
                                  self.name
 								 ])
-            Fastq.trimmed_num += 1
+            self.trimmed5T = True
 
         # The second trimming step is needed to deal with reads like
         # "TATCTCTTTTATTTTTTTTTTTTGAAGGGCAGATTTAAAATACACTATTAAAATTATTAA"
@@ -102,7 +94,7 @@ class Fastq():
                                          self.name[self.name.find(':')+1:]
                                          ])
 
-    def trim_3p_Ns(self):
+    def trim_3p_Ns(self, randNT3):
         '''Trim randNT3 NT from 3' end if necessary.
 
 		Example:		
@@ -119,21 +111,43 @@ class Fastq():
 		# removed
         if re.search('cutadapt$', self.name):
             self.name = self.name.replace('cutadapt', 
-			                              '<' + self.seq[-self.randNT3:] + '>')
-            self.seq = self.seq[:-self.randNT3]
-            self.qual = self.qual[:-self.randNT3]
+			                              '<' + self.seq[-randNT3:] + '>')
+            self.seq = self.seq[:-randNT3]
+            self.qual = self.qual[:-randNT3]
 
 
-def fastq_reader(infile, randNT5, randNT3):
-    '''Generator of Fastq objects from a fastq or fastq.gz file'''
-    Fastq.randNT5 = randNT5
-    Fastq.randNT3 = randNT3
-    i = 0
-    name = None
-    seq = None
-    qual = None
-    if infile.endswith('.fastq'):
-        for line in open(infile):
+class FastqFile():
+    '''Fastq file'''
+    def __init__(self, filename, randNT5, randNT3):
+        assert Path(filename).suffix == '.fastq', 'A *.fastq file is needed.'
+        self.name = filename
+        self.newname = re.sub('\.fastq$', '.trimmed.fastq', self.name)
+        self.randNT5 = randNT5
+        self.randNT3 = randNT3
+        self.read_num = 0
+        self.trimmed5T_num = 0
+
+    def __str__(self):
+        pass
+    
+    def get_name(self):
+        return self.name
+
+    def get_read_num(self):
+        if self.read_num == 0:
+            line_num = 0
+            for _ in open(self.name): line_num += 1
+            self.read_num = line_num//4      
+        return self.read_num
+    
+    def get_fastq_record(self):
+        '''Generator of FastqRecord objects from a fastq file'''
+        i = 0
+        name = None
+        seq = None
+        qual = None
+        self.read_num = 0
+        for line in open(self.name):
             i += 1
             curr_line = line.strip()
             if i % 4 == 1:
@@ -142,45 +156,17 @@ def fastq_reader(infile, randNT5, randNT3):
                 seq = curr_line
             elif i % 4 == 0:
                 qual = curr_line
-                yield Fastq(name, seq, qual)
-    else:
-        print("Please provide a .fastq file.")
-        raise FileNotFoundError     
+                yield FastqRecord(name, seq, qual)
+                self.read_num += 1
 
-
-def fastq_file_trimmer(infile, randNT5, randNT3):
-    '''Trims 5' T-stretches of fastq records in infile and write to a new file
-    Returns total read number and (5' T-stretch) trimmed read number.
-    '''
-    assert infile.endswith('.fastq') 
-    outfile = infile.replace('.fastq', '.trimmed.fastq') 
-    with open(outfile, 'w') as fout:
-        for fastq_record in fastq_reader(infile, randNT5, randNT3):
-            fastq_record.trim_5p_Ts()
-            fout.write(str(fastq_record))
-        return fastq_record.read_num, fastq_record.trimmed_num
- 
-""" def count_fastq(fastq_file):
-    '''Counts the number of fastq records in a fastq file'''
-    from subprocess import check_output
-    cmd = 'wc -l ' + fastq_file   
-    cmd_out = check_output(cmd, shell=True)
-    count = str(cmd_out).split('\'')[1].split(' ')[0]
-    count = int(count)//4
-    sample_name = fastq_file.split('/')[-1].split('.')[0]
-    return (sample_name, count) """
-
-
-""" def count_pass(sam_file):
-    '''Counts the number of pass or nonpass records in a sam file'''
-    from subprocess import check_output
-    # Skip header 
-    cmd = 'grep -v @ ' + sam_file + ' | wc -l' 
-    cmd_out = check_output(cmd, shell=True)
-    count = int(str(cmd_out).split('\'')[1].strip('\\n')) 
-    sample_name = sam_file.split('/')[-1].split('.')[0]
-    return (sample_name, count)
-  """   
+    def create_trimmed_fastq_file(self):
+        '''Trims 5' Ts of fastq records and write to a new file
+        '''
+        with open(self.newname, 'w') as fout:
+            for fastq_record in self.get_fastq_record():
+                fastq_record.trim_5p_Ts(self.randNT5)
+                if fastq_record.trimmed5T: self.trimmed5T_num += 1
+                fout.write(str(fastq_record))
 
 
 def load_fasta_genome(genome_dir):

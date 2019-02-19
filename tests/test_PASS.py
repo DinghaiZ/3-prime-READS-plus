@@ -6,13 +6,16 @@ from pathlib import Path
 from subprocess import check_output
 import PASS
 
+
+@pytest.fixture(scope='module')
+def file_to_trim():
+    return "tests/data/rawfastq/siCtrl_1_small.fastq"
+
 #@pytest.mark.skip()
-def test_fastq_reader():
-    infile = "tests/data/rawfastq/siCtrl_1_small.fastq"
-    for i, fastq_record in enumerate(PASS.fastq_reader(infile, 6, 4)):
+def test_FastqRecord_get_fastq_record(file_to_trim):
+    fastq_file_obj = PASS.FastqFile(file_to_trim, 6, 4)
+    for i, fastq_record in enumerate(fastq_file_obj.get_fastq_record()):
         if i == 1:
-            assert fastq_record.randNT5 == 6
-            assert fastq_record.randNT3 == 4
             assert str(fastq_record) == "@NB500952:186:H35F2BGX5:1:11101:1487"\
                 + "5:1080 1:N:0:ATCACG\nTATCTCTTTTATTTTTTTTTTTTGAAGGGCAGATTTA"\
                     + "AAATACACTATTAAAATTATTAAATATTAAAAAACAACA\n+\nAAA/A/EEEE"\
@@ -26,13 +29,12 @@ def test_fastq_reader():
             assert fastq_record.qual == \
                 "AAA/A/EEEEEEEEEEEEEAEE/AAE///E///E</EE/A/EE</6//6//<66//6//6/"\
                     + "/////<//6EE/6/6"
-    
-    assert i == fastq_record.read_num - 1
 
-def test_trim_5p_Ts():
-    infile = "tests/data/rawfastq/siCtrl_1_small.fastq"
-    for i, fastq_record in enumerate(PASS.fastq_reader(infile, 6, 4)):
-        fastq_record.trim_5p_Ts()
+
+def FastqRecord_test_trim_5p_Ts(file_to_trim):
+    fastq_file_obj = PASS.FastqFile(file_to_trim, 6, 4)
+    for i, fastq_record in enumerate(fastq_file_obj.get_fastq_record()):
+        fastq_record.trim_5p_Ts(fastq_file_obj.randNT5)
         # No trimming
         if i == 0:
             assert fastq_record.name == \
@@ -43,7 +45,6 @@ def test_trim_5p_Ts():
             assert fastq_record.qual == \
                 "AAAAAEEEEAAEEEEEEE/E/E/A/E6E/AAE/E/</</AEE/6/////A<//<A////6/"\
                     + "//6/A</EEEAA/<6"
-            assert fastq_record.trimmed_num == 0
         # Trim twice
         if i == 1:
             assert fastq_record.name == \
@@ -53,7 +54,6 @@ def test_trim_5p_Ts():
                 "GAAGGGCAGATTTAAAATACACTATTAAAATTATTAAATATTAAAAAACAACA"
             assert fastq_record.qual == \
                 "AAE///E///E</EE/A/EE</6//6//<66//6//6//////<//6EE/6/6"
-            assert fastq_record.trimmed_num == 1
         # Trim once
         if i == 2:
             assert fastq_record.name == \
@@ -62,9 +62,24 @@ def test_trim_5p_Ts():
                 "AAAAAAAAAATAAAAAATATTTTTAAAATTATAAATTTTTTTTTGTAAAATCAC"
             assert fastq_record.qual == \
                 "EEEAEE/E///6AEE////A//<<6//66//6//66//66/6/6////////66"
-            assert fastq_record.trimmed_num == 2
-       
-    print("\nTotal trimmed fastq reads: ", fastq_record.trimmed_num)
+
+
+def test_FastqFile_incorrect_file_format():
+    file_to_trim = "tests/data/rawfastq/siCtrl_1_small"
+    with pytest.raises(AssertionError):
+        PASS.FastqFile(file_to_trim, 6, 4)
+
+
+def test_FastqFile_get_read_num(file_to_trim):
+    fastq_file_obj = PASS.FastqFile(file_to_trim, 6, 4)
+    assert fastq_file_obj.get_read_num() == 250
+
+
+def test_FastqFile_create_trimmed_fastq_file(file_to_trim):
+    fastq_file_obj = PASS.FastqFile(file_to_trim, 6, 4)
+    fastq_file_obj.create_trimmed_fastq_file()
+    assert fastq_file_obj.trimmed5T_num == 142
+    assert fastq_file_obj.get_read_num() == 250
 
 
 @pytest.fixture(scope='module')
@@ -80,7 +95,7 @@ def genome_mm9():
 
 
 @pytest.mark.slow
-def test_genome_mm9(genome_mm9):
+def test_load_fasta_genome(genome_mm9):
     assert isinstance(genome_mm9, dict)
     assert 'chr1' in genome_mm9.keys()
 
@@ -100,20 +115,3 @@ def test_get_seq(chromosome, strand, start, end, genome_mm9, expected_output):
     seq = PASS.get_seq(chromosome, strand, start, end, genome_mm9) 
     assert seq == expected_output
 
-
-def test_fastq_file_trimmer():
-    infile = "tests/data/rawfastq/siCtrl_1_small.fastq"
-    randNT5 = 6
-    randNT3 = 4
-    read_num, trimmed_num = PASS.fastq_file_trimmer(infile, randNT5, randNT3)
-    assert read_num == 250
-    assert trimmed_num == 142
-
-def test_pick_PASS():
-    pass
-
-
-
-    
-
- 

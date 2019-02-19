@@ -3,3 +3,4 @@
 *.gz
 .vscode/settings.json
 *.fastq
+tests/data/*
