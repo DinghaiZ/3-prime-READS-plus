@@ -20,9 +20,12 @@ class FastqRecord():
         self.trimmed5T = False
         self.trimmed3NT = False
 
+    def __repr__(self):
+        return f"FastqRecord('{self.name}', '{self.seq}', '{self.qual}')"
+
     def __str__(self):
         return '\n'.join(['@' + self.name, self.seq, '+', self.qual + '\n'])
-    
+
     def get_name(self):
         return self.name
     
@@ -127,6 +130,9 @@ class FastqFile():
         self.read_num = 0
         self.trimmed5T_num = 0
 
+    def __repr__(self):
+        pass
+    
     def __str__(self):
         pass
     

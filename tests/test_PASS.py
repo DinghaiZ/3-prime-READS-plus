@@ -29,6 +29,9 @@ def test_FastqRecord_get_fastq_record(file_to_trim):
             assert fastq_record.qual == \
                 "AAA/A/EEEEEEEEEEEEEAEE/AAE///E///E</EE/A/EE</6//6//<66//6//6/"\
                     + "/////<//6EE/6/6"
+            print(repr(fastq_record), '\n')
+            print(str(fastq_record), '\n')
+
 
 
 def FastqRecord_test_trim_5p_Ts(file_to_trim):

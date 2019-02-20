@@ -4,3 +4,6 @@
 .vscode/settings.json
 *.fastq
 tests/data/*
+*.Rhistory
+projects/*
+ipynb_checkpoints/*
