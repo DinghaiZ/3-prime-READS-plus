@@ -7,4 +7,4 @@ tests/data/*
 *.Rhistory
 projects/*
 .ipynb_checkpoints/*
-
+.gitignore.swp
