@@ -73,6 +73,13 @@ def test_FastqFile_incorrect_file_format():
         PASS.FastqFile(file_to_trim, 6, 4)
 
 
+def test_FastqFile_repr(file_to_trim):
+    fastq_file_obj = PASS.FastqFile(file_to_trim, 6, 4)
+    assert repr(fastq_file_obj) == "FastqFile('tests/data/rawfastq/siCtrl_1_small.fastq', 6, 4)"
+    print(fastq_file_obj)
+
+
+
 def test_FastqFile_get_read_num(file_to_trim):
     fastq_file_obj = PASS.FastqFile(file_to_trim, 6, 4)
     assert fastq_file_obj.get_read_num() == 250
