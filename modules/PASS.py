@@ -18,7 +18,7 @@ class FastqRecord():
         self.seq = seq
         self.qual = qual
         self.trimmed5T = False
-        self.trimmed3NT = False
+        self.trimmed3N = False
 
     def __repr__(self):
         return f"FastqRecord('{self.name}', '{self.seq}', '{self.qual}')"
@@ -117,12 +117,15 @@ class FastqRecord():
 			                              '<' + self.seq[-randNT3:] + '>')
             self.seq = self.seq[:-randNT3]
             self.qual = self.qual[:-randNT3]
+            self.trimmed3N = True
 
 
 class FastqFile():
     '''Fastq file'''
     def __init__(self, filename, randNT5, randNT3):
         assert Path(filename).suffix == '.fastq', 'A *.fastq file is needed.'
+        assert isinstance(randNT5, int)
+        assert isinstance(randNT3, int)
         self.name = filename
         self.newname = re.sub('\.fastq$', '.trimmed.fastq', self.name)
         self.randNT5 = randNT5
@@ -131,10 +134,15 @@ class FastqFile():
         self.trimmed5T_num = 0
 
     def __repr__(self):
-        pass
+        return f"FastqFile('{self.name}', {self.randNT5}, {self.randNT3})"
     
     def __str__(self):
-        pass
+        output = (
+            f"FastqFile Object with filename '{self.name}', number of 5' "
+            f"random neucleotides: {self.randNT5}, number of 3' random "
+            f"nucleotides: {self.randNT3}"
+        )
+        return output
     
     def get_name(self):
         return self.name
