@@ -6,4 +6,5 @@
 tests/data/*
 *.Rhistory
 projects/*
-ipynb_checkpoints/*
+.ipynb_checkpoints/*
+
