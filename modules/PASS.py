@@ -122,10 +122,10 @@ class FastqRecord():
 
 class FastqFile():
     '''Fastq file'''
-    def __init__(self, filename, randNT5, randNT3):
+    def __init__(self, filename, randNT5 = None, randNT3 = None):
         assert Path(filename).suffix == '.fastq', 'A *.fastq file is needed.'
-        assert isinstance(randNT5, int)
-        assert isinstance(randNT3, int)
+        assert isinstance(randNT5, int) or randNT5 is None
+        assert isinstance(randNT3, int) or randNT3 is None
         self.name = filename
         self.newname = re.sub('\.fastq$', '.trimmed.fastq', self.name)
         self.randNT5 = randNT5
@@ -181,6 +181,20 @@ class FastqFile():
                 fastq_record.trim_5p_Ts(self.randNT5)
                 if fastq_record.trimmed5T: self.trimmed5T_num += 1
                 fout.write(str(fastq_record))
+
+
+def count_fastq(filename):
+    '''A function for counting fastq record number'''
+    return Path(filename).name, FastqFile(filename).get_read_num()
+
+
+def trim_write_count_fastq(filename, randNT5, randNT3):
+    '''A function for trimming and writing fastq records. 
+    Also counts fastq records in input and output files.
+    '''
+    FF = FastqFile(filename, randNT5, randNT3)
+    FF.create_trimmed_fastq_file()
+    return Path(FF.name).name, FF.read_num, FF.trimmed5T_num
 
 
 def load_fasta_genome(genome_dir):
