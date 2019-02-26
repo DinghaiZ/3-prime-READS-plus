@@ -1,10 +1,11 @@
 *.pyc
-*checkpoint.ipynb
 *.gz
 .vscode/settings.json
 *.fastq
 tests/data/*
 *.Rhistory
 projects/*
-.ipynb_checkpoints/*
 .gitignore.swp
+Aligned.out.sam
+Log.out
+Log.progress.out
