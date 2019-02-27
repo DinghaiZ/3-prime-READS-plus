@@ -149,7 +149,7 @@ class FastqFile():
         return self.read_num
     
     def get_fastq_record(self):
-        '''Generator of FastqRecord objects from a fastq file'''
+        '''Generator of FastqRecord objects'''
         i = 0
         name = None
         seq = None
@@ -346,33 +346,13 @@ def pick_PASS(sam_file, min_mapq=10,  direction='reverse'):
     sam_ref_file.close()
     os.system('rm ' + sam_file)
 
-# List of sam files as input
-sam_files = sorted(str(sam_file) for sam_file in sam_dir.glob('*Aligned.out.sam'))
 
-# Genome loaded into memory is available for all processes
-genome = load_fasta_genome(genome_dir)
-
-# Try parallel computing, which requires more disk space
-try:
-    with mp.Pool(processes = WORKERS) as pool:
-        pool.starmap(pick_PASS, [(sam_file, 10, 'reverse') for sam_file in sam_files])
-except OSError:
-    os.system('rm ' + sam_dir + '/*pass')
-    print("No space left on device. Trying again with parallel computing turned off.")
-    for sam_file in sam_files:
-        print("Processing ", sam_file)
-        pick_PASS(sam_file = sam_file)
-# Release memory    
-del genome      
-
-
-def count_5Ts_in_folder(sam_dir):
-    '''
-    Count the number of reads with certain 5'T-stretch lengths for pass and 
-    nopass reads in files in the sam_dir. Return a DataFrame.
+def count_5Ts(sam_dir):
+    '''Count the number of reads with certain 5'T-stretch lengths for pass and 
+    nopass reads in sam files in the sam_dir. Return a DataFrame.
     '''
     sample_names = []
-    results = []  # container
+    results = []  
 
     import re
     import numpy as np
@@ -424,44 +404,9 @@ def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length = 5):
                 
     fout1.close()
     fout2.close()
-    
-
-def count_MAP_in_folder(pass_dir, result_dir, pattern = 'pass\.sam$',
-                        outfile = 'map.scores.csv'):
-    '''Count the number of reads with certain MAP scores for reads in sam 
-    files with pattern in the filename in the pass_dir.'''
-
-    results = {}
-    
-    from collections import defaultdict 
-    import re
-    
-    for sam_file in [filename for filename in os.listdir(pass_dir) \
-    if re.search(pattern, filename)]:
-        MAPs = defaultdict(int)
-        sam_in = os.path.join(pass_dir, sam_file)   
-        print('Count MAP scores in ' + sam_in)
-        with open(sam_in, 'r') as fin:
-            for line in fin:
-                if line[0] == '@' or int(line.split()[4]) < 10:
-                    continue
-                                
-                MAPs[line.split()[4]] += 1
-        results[sam_file] = MAPs
-        
-    import pandas as pd
-    df = pd.DataFrame(results)   
-    df = df/df.sum()
-    df.to_csv(os.path.join(result_dir, outfile), index_label = 'MAP')
-    
-'''
-#test 
-count_MAP_in_folder(pass_dir = '../data/batch2', result_dir = '../result/batch3', pattern = 'fastq\.sam$',
-                        outfile = 'test.map.scores.csv')
-'''                        
 
 
-def select_unique_fragments_2(input_file, random_NT_len):
+def select_unique_reads(input_file, random_NT_len):
     '''
     Use the TS\d+[ATCG]{3} string in read name and chromosome, flag, and LM 
     tags to identify potential PCR duplicates.
@@ -601,10 +546,10 @@ def cluster_neighboring_cleavage_sites(cs_cluster, max_distance):
                                                max_distance)
 
 
-def cluster_reads_in_sam_dir(file_pattern='pass.unique.sam',
-                             outfile='cluster.numbers.csv',
-                             direction='reverse',
-                             max_distance=24):
+def cluster_reads(file_pattern='pass.unique.sam',
+                  outfile='cluster.numbers.csv',
+                  direction='reverse',
+                  max_distance=24):
     """
     Analyze a sam file and first generate a table with the following columns: 
     chromosome, strand, pos, num. Then recursively combine reads with LAP within 
@@ -724,11 +669,11 @@ def cluster_reads_in_sam_dir(file_pattern='pass.unique.sam',
                 fout.write('%s,%s,%s,%s\n' %
                            (chromosome, strand, position, counts))
                
-def cluster_CS_in_dirs(infolders, outfolder, 
-                         cs_file_name = 'CS.all.reads.csv', 
-                         #direction = 'reverse', 
-                         max_distance = 24,
-                         outfile = 'meta.cluster.numbers.csv'):
+def cluster_CS(infolders, outfolder, 
+               cs_file_name = 'CS.all.reads.csv', 
+               #direction = 'reverse', 
+               max_distance = 24,
+               outfile = 'meta.cluster.numbers.csv'):
     '''
     Read "CS.all.reads.csv" files (containing read numbers for each unclustered 
     cleavage site) in input folders. From each CS.all.reads.csv file, build a dict
