@@ -224,35 +224,42 @@ def get_seq(chromosome, strand, start, end, genome):
         return seq
     
      
-def pick_PASS(sam_file, min_mapq=10,  direction='reverse'):
-    '''Split sam_file into PASS, noPASS, and yeast (spike-in) sam files.
+def pick_PASS(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
+    '''Split a sam_file into PASS, noPASS, and spike-in sam files.
 
     Loop through records in the sam file, if the record is PASS, write to
-    sam_pass. Mapped non-PASS reads are saved in sam_nopass. Reads mapped to 
+    pass_file. Mapped non-PASS reads are saved in nopass_file. Reads mapped to 
     rRNA genes are skipped. Sequencing direction can only be reverse or forward. 
 
     Attach matched tail length (ML), unmatched tail length (UL), and last mapped
     position (LM) to the end of readname. The head (such as 'TS11AAC') and the 
     tail (such as 'ML:i:4\tUL:i:9\tLM:i:1234') of the read name is the unique 
     identifier of the read.
+    
+    Arguments:
+    sam_file: string. Name of input sam file.
+    min_mapq: int. Minimum MAPQ score
+    direction: string. Either 'reverse' (default) or 'forward'
+    spike_in: a 4-charactor string for identifying spike-in RNA. For example,
+    spike_in = 'ychr' for spike-in yeast RNA if yeast chromosomes are named as 'ychr1', 
+    'ychrM', etc. 
+    
+    Outputs:
+    Separate sam files containing either PASS reads, nonPASS reads, or spike-ins.
     '''
-
-    sam_pass = sam_file.replace('.sam', '.pass')
-    sam_nopass = sam_file.replace('.sam', '.nopass')
-    sam_ref = sam_file.replace('.sam', '.ref')
-
-    sam_pass_file = open(sam_pass, 'w')
-    sam_nopass_file = open(sam_nopass, 'w')
-    sam_ref_file = open(sam_ref, 'w')
+    pass_file = open(sam_file.replace('.sam', '.pass'), 'w')
+    nopass_file = open(sam_file.replace('.sam', '.nopass'), 'w')
+    if not spike_in: spike_in_file = open(sam_file.replace('.sam', '.spike_in'), 'w')
+    
     lap = 0
 
     with open(sam_file, 'r') as in_file:
         for line in in_file:
             # Skip header
             if line[0] == '@':
-                sam_pass_file.write(line)
-                sam_nopass_file.write(line)
-                sam_ref_file.write(line)
+                pass_file.write(line)
+                nopass_file.write(line)
+                if not spike_in: spike_in_file.write(line)
                 continue
             # Process each line
             (readname, flag, chromosome, position, mapq, cigar) = line.split()[:6]
@@ -263,8 +270,8 @@ def pick_PASS(sam_file, min_mapq=10,  direction='reverse'):
             if mapq < min_mapq:
                 continue
             # Record reads mapped to spiked-in yeast genome 
-            if chromosome[:4] == 'ychr':  # or chromosome[:4] == 'BK000964':
-                sam_ref_file.write(line)
+            if not spike_in and chromosome[:4] == spike_in:  
+                spike_in_file.write(line)
                 continue
             # Ignore reads mapped to other chromosomes, such as 'BK000964'
             if not chromosome[:3] == 'chr':
@@ -276,7 +283,7 @@ def pick_PASS(sam_file, min_mapq=10,  direction='reverse'):
                 t_stretch_len = int(match.groups()[0])
             # Skip records with short T-stretches
             if not match or t_stretch_len < 2:
-                sam_nopass_file.write(line)
+                nopass_file.write(line)
                 continue
 
             # Get genomic sequence downstream of the LAP (last mapped position).
@@ -286,25 +293,24 @@ def pick_PASS(sam_file, min_mapq=10,  direction='reverse'):
                 strand = '+'
                 # Process cigar to determine the LAP.
                 # Insertion (I) will not affect the covered distance.
-                # if cigar = '38M10S' or '38', nums will be 38
                 nums = re.split('[MDN]', re.sub('\d+I', '', cigar))[:-1]
                 covered = sum(int(x) for x in nums)
                 # get_seq() returns reverse complemented sequence if strand == '-'
                 downstream_seq = get_seq(chromosome, strand,
-                                         start=position + covered,
-                                         end=position + covered + t_stretch_len - 1,
-                                         genome=genome)
+                                         start = position + covered,
+                                         end = position + covered + t_stretch_len - 1,
+                                         genome = genome)
                 lap = position + covered - 1
             elif (direction.lower() == 'reverse' and flag == '0') or \
                     (direction.lower() == 'forward' and flag == '16'):
                 strand = '-'
                 downstream_seq = get_seq(chromosome, strand,
-                                         start=position - t_stretch_len, 
-                                         end=position - 1,
-                                         genome=genome)
+                                         start = position - t_stretch_len, 
+                                         end = position - 1,
+                                         genome = genome)
                 lap = position
             else:
-                sam_nopass_file.write(line)
+                nopass_file.write(line)
                 continue
 
             # If the 5' T-stretch was trimmed twice (like 'TTTTTTTGTTTT'),
@@ -322,7 +328,7 @@ def pick_PASS(sam_file, min_mapq=10,  direction='reverse'):
                         lap -= len(elements[1])
                     # If the t_stretch_len is reduced enough, no need to analyze downstream sequence
                     if t_stretch_len == 0:
-                        sam_nopass_file.write(line.strip() + '\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
+                        nopass_file.write(line.strip() + '\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
                                               % (0, 0, lap))
                         continue
 
@@ -333,18 +339,65 @@ def pick_PASS(sam_file, min_mapq=10,  direction='reverse'):
                 # ML: Matched Length 
                 # UL: Unmatched Length
                 # LM: Last Mapped position(UL) 
-                sam_pass_file.write(line.strip() + '\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
+                pass_file.write(line.strip() + '\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
                                     % (matched_len, t_stretch_len - matched_len, lap))
             else:
                 match = re.match('A*', downstream_seq)
                 matched_len = len(match.group())  # value: 1 ~ t_stretch_len
-                sam_nopass_file.write(line.strip() + '\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
+                nopass_file.write(line.strip() + '\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
                                       % (matched_len, t_stretch_len - matched_len, lap))
-
-    sam_pass_file.close()
-    sam_nopass_file.close()
-    sam_ref_file.close()
+    pass_file.close()
+    nopass_file.close()
+    if not spike_in: spike_in_file.close()
     os.system('rm ' + sam_file)
+
+
+def pick_unique_pass(pass_file, random_NT_len):
+    '''
+    Use the TS\d+[ATCG]{random_NT_len} string in read name and chromosome, flag,
+    and LM tags to remove potential PCR duplicates. 
+    
+    Arguments:
+    pass_file: A *.pass file generated by pick_PASS() or split_sam()
+    random_NT_len: Length of random nucleotide sequence in the 3' ligation 
+    adapter for reverse direction sequencing.
+
+    Output:
+    Unique PASS reads will be written to a new file.
+    '''
+    import itertools
+
+    output_file = pass_file.replace('.pass', '.unique.pass')
+    fout = open(output_file, 'w')
+    
+    # Make a set to save unique ids
+    unique_ids = set()
+    # Precompile the search patter
+    pattern = re.compile('TS(\d+[ATCGN]{%s})' % random_NT_len)
+
+    with open(pass_file, 'r') as fin:
+        for line in fin:
+            if line[0] == '@':
+                fout.write(line)
+                continue
+            # Calculate the unique identifier for each PASS read
+            l = line.split()
+            m = re.match(pattern, l[0])
+            # Calculate read length
+            cigar = l[5]
+            nums = re.split('[MDN]', re.sub('\d+I', '', cigar))[:-1]
+            covered = sum(int(x) for x in nums)
+            if m:
+                l = [m.group(1), l[1:3], l[-1][:-1], str(covered)]
+                # if 4N has been trimmed from 3' end
+                #cutadapt = re.search('4N([ATCG]{4})4N', l[0])
+                #if cutadapt:
+                #    l.append(cutadapt.groups[0])
+                this_id = ''.join(list(itertools.chain(*l)))
+                # Copy the line to new file if this_id has not been seen before
+                if not this_id in unique_ids:
+                    unique_ids.add(this_id)
+                    fout.write(line)
 
 
 def count_5Ts(sam_dir):
@@ -380,6 +433,7 @@ def count_5Ts(sam_dir):
 
     return TS
 
+
 def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length = 5):
     '''Pick PASS reads with at least min_length mapped 5' Ts in pass_in and copy 
     them into the astretch_out file. '''
@@ -406,46 +460,7 @@ def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length = 5):
     fout2.close()
 
 
-def select_unique_reads(input_file, random_NT_len):
-    '''
-    Use the TS\d+[ATCG]{3} string in read name and chromosome, flag, and LM 
-    tags to identify potential PCR duplicates.
-    '''
-    output_file = input_file.replace('.pass', '.unique.pass')
-    import itertools
-    # make a set to save unique ids
-    unique_ids = set()
-    # precompile the search patter
-    pattern = re.compile('TS(\d+[ATCGN]{%s})' % random_NT_len)
-    fout = open(output_file, 'w')
-    # open infile, calculate the id
-    with open(input_file, 'r') as fin:
-        #print('Identifying uPASS in ' + input_file)
-        for line in fin:
-            if line[0] == '@':
-                fout.write(line)
-                continue
-            # print(line)
 
-            # calculate the id for the read
-            l = line.split()
-            m = re.match(pattern, l[0])
-            # calculate read length
-            cigar = l[5]
-            nums = re.split('[MDN]', re.sub('\d+I', '', cigar))[:-1]
-            covered = sum(int(x) for x in nums)
-            if m:
-                l = [m.group(1), l[1:3], l[-1][:-1], str(covered)]
-                # if 4N has been trimmed from 3' end
-                cutadapt = re.search('4N([ATCG]{4})4N', l[0])
-                if cutadapt:
-                    l.append(cutadapt.groups[0])
-                this_id = ''.join(list(itertools.chain(*l)))
-                # only copy the line if this_id has not been seen before
-                if not this_id in unique_ids:
-                    unique_ids.add(this_id)
-                    fout.write(line)
-                    
 def count_unique_reads_in_folder(sam_dir, outfolder, 
                           outfile = 'unique_pass_num.csv'):
     '''Count number of pass and ref_pass reads in sam files in the pass_dir'''
@@ -479,65 +494,68 @@ def count_unique_reads_in_folder(sam_dir, outfolder,
   
 def find_neighboring_indexes(v, max_distance):
     """ 
-    v is like [[100395423, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]],...],
-    sorted by the position 100395423. 
     Yield the indexes of lists containing neighboring positions
+    
+    Arguments:
+    v is like [[100395423, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]],...],
+    sorted by the position (100395423, etc). 
+
+    Output:
     """
-    # a container to hold list of liss
+    # A container to hold list of liss
     index_list = []
     for i in range(len(v))[:-1]:
         if v[i + 1][0] - v[i][0] <= max_distance:
-            #index_list.extend([i, i+1])
             index_list.append(i)
             continue
         if len(index_list) > 0:
-            index_list.append(i)  # append the last neighbor
+            index_list.append(i)  
             yield index_list
             index_list = []
 
 
 def cluster_neighboring_cleavage_sites(cs_cluster, max_distance):
     """
-    cs_cluster is like:[position, [num in sam_files]] (Ordered by position)
+    Recursively merge the CS in the cluster using a devide and conqurer algorithm
+    Neighboring positions located within max_distance from each other are merged. 
+
+    Arguments:
+    cs_cluster is like:[position, [num in pass_files]] (Ordered by position)
     [[155603441, [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]],
      [155603444, [3, 1, 3, 14, 13, 8, 6, 1, 1, 10, 1, 6]],
      [155603445, [8, 1, 4, 13, 20, 8, 6, 0, 5, 19, 5, 19]]], with
-    Neighboring positions located within max_distance from each other are merged. 
-    Recursively merge the CS in the cluster: devide and conqurer!
 
+    Output:
     """
-    #import itertools
-    sample_number = len(cs_cluster[0][1]) // 2  # different from python 2.7
-    # check base case
+    sample_number = len(cs_cluster[0][1]) // 2  
+    # Check base case
     clustered = True
     for i in range(len(cs_cluster))[:-1]:
         if cs_cluster[i + 1][0] - cs_cluster[i][0] <= max_distance:
             clustered = False
     if clustered == True:
         return True
-    # when the clustering is not completed:
+    # When the clustering is not completed:
     else:
-        # get max of normalized read numbers from all samples and the index for max
-        # print(cs_cluster)
-        (m, i) = max((v, i) for i, v in enumerate((sum(pos_num[1][sample_number:])
+        # Get max of normalized read numbers from all samples and the index for max
+        _, i = max((v, i) for i, v in enumerate((sum(pos_num[1][sample_number:])
                                                    for pos_num in cs_cluster)))
-        # merge cs within max_distance from the cs with max read number
+        # Merge cs within max_distance from the cs with max read number
         left_index = i  # leftmost position merged
         right_index = i  # rightmost position merged
         for j, (pos, nums) in enumerate(cs_cluster):
             if abs(pos - cs_cluster[i][0]) <= max_distance and \
                     abs(pos - cs_cluster[i][0]) > 0:
-                # combine the read numbers for two CS, sample by sample
+                # Combine the read numbers for two CS, sample by sample
                 # cs_cluster[i] is like
                 # [155603471, [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]]
                 # nums is like [0, 0, 0, 0, 0, 5, 1, 0, 0, 0, 0, 0]
                 cs_cluster[i][1] = [sum(x)
                                     for x in zip(cs_cluster[i][1], nums)]
-                cs_cluster[j][1] = 0  # don't delete cs_cluster[j]
+                cs_cluster[j][1] = 0  
                 left_index = min(left_index, j)
                 right_index = max(right_index, j)
-
-        # devide and conqure
+        # Devide and conqure
         if left_index > 0:
             cluster_neighboring_cleavage_sites(cs_cluster[:left_index],
                                                max_distance)
@@ -546,48 +564,42 @@ def cluster_neighboring_cleavage_sites(cs_cluster, max_distance):
                                                max_distance)
 
 
-def cluster_reads(file_pattern='pass.unique.sam',
+def cluster_reads(pass_files,
                   outfile='cluster.numbers.csv',
                   direction='reverse',
-                  max_distance=24):
+                  max_distance = 24):
     """
-    Analyze a sam file and first generate a table with the following columns: 
-    chromosome, strand, pos, num. Then recursively combine reads with LAP within 
-    24 nt, from pos with the highest read number to the pos with next highest 
-    read number.
+    Cluster PASS reads within max_distance.
 
-    Read sam files with file_pattern in infolder. For each sam file, build a dict
-    readcounts like {'chr9:-:100395423':[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]}.
-    The [list of int] saves the number of reads from each sam_file. 
-    dict is like sample_count[sample1(str)] = num_from_sample1(int)
+    First generate a table with the following columns: chromosome, strand, pos, 
+    num. Then recursively combine reads with LAP within max_distance nt (from 
+    position with the highest read number to the position with next highest 
+    read number).
 
+    Build a dict of readcounts like {'chr9:-:100395423':[0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 56]}. The [list of int] saves the number of reads from each 
+    pass_file. 
     """
-
-    import os
-    sam_files = [file_name for file_name in os.listdir(sam_dir)
-                 if file_name.endswith(file_pattern)]
-    sam_file_num = len(sam_files)
-
     import re
-    # regular expression pattern for finding last mapped position (LM) in read names
-    re_pattern = re.compile('LM:i:(\d+)')
-
     import collections
-    # readcounts is a read id counter
-    # example: {'chr9:-:100395423':[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]}
+    
+    print('Reading sam files containing PASS reads ...')
+    file_num = len(pass_files)
+    # Pattern for finding last mapped position (LM) in read names
+    re_pattern = re.compile('LM:i:(\d+)')
+    # Readcounts is a read id counter
     readcounts = {}
-    # go through sam files and get read numbers for each read id from each sam file
-    for s, sam_file in enumerate(sam_files):
-        # read sam file, calculate read id, and count number of reads
-        # s will be used as index
-        fin = open(os.path.join(sam_dir, sam_file), 'r')
+    # Go through sam files and get read numbers for each calculated read id
+    for i, pass_file in enumerate(pass_files):
+       # Read sam file, calculate read id, and count number of reads
+        fin = open(pass_file, 'r')
         for line in fin:
             if line[0] == '@':
                 continue
             elements = line.split()
             chromosome = elements[2]
             flag = elements[1]
-            # calculate strand
+
             if (direction == 'reverse' and flag == '16') or \
                     (direction == 'forward' and flag == '0'):
                 strand = '+'
@@ -598,77 +610,64 @@ def cluster_reads(file_pattern='pass.unique.sam',
             position = re.search(re_pattern, elements[-1]).group(1)
 
             read_id = ':'.join([chromosome, strand, position])
-            # initialize the list for holding number of reads for each file
-            readcounts.setdefault(read_id, [0] * sam_file_num)[s] += 1
-            """
-            # when s is 0 and sam_file[s] is the first one analyzed,
-            # readcount.popitem() may return something like 
-            # 'chr7:-:97599217', [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-            # After analyzing the second files in the folder,
+            # Initialize the list for holding number of reads for each file
+            readcounts.setdefault(read_id, [0] * file_num)[i] += 1
             # readcount.popitem() may return something like:
             # ('chr11:+:31270274', [6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-            """
-
         fin.close()
 
-    print('Clustering reads...')
-
-    # calculate the normalized read numbers and attach to the read numbers
+    print('Clustering reads ...')
+    # Calculate the normalized read numbers and attach to the read numbers
     import pandas as pd
-    df = pd.DataFrame(readcounts)
-    df = df.T
+    df = pd.DataFrame(readcounts).T
     normalized = df / df.sum(0)
-    df = pd.concat([df, normalized], axis=1, ignore_index=True)
+    df = pd.concat([df, normalized], axis = 1, ignore_index = True)
     readcounts = df.T.to_dict('list')
     # readcount.popitem() may return something like:
     #  ('chr11:+:31270274', [6.0, 7.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
     #  0.0, 0.0, 9.1427902698768829e-07,3.0861678694165542e-06, 0.0, 0.0 ...]),
-    # with the first 12 values as read counts and the next 12 values as normalized
-    # read counts
+    # with the first 12 values being read counts and the next 12 values being 
+    # normalized read counts
 
-    # separate positions based on chrmosome & strand combination
+    # Separate positions based on chrmosome & strand combination
     poscounts = collections.defaultdict(list)
     while len(readcounts) > 0:
-        k, v = readcounts.popitem()  # saves memory
+        k, v = readcounts.popitem()  
         k = k.split(':')
-        poscounts[':'.join(k[:2])].append(
-            [int(k[2]), v])  # don't forget int()!!!
+        poscounts[':'.join(k[:2])].append([int(k[2]), v]) 
         # poscounts.popitem() is like
         # {'chr9:-':[[100395423, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]],...]}
     del readcounts
 
-    # sort the list of lists for each chromosome & strand combination
+    # Sort the list of lists for each chromosome & strand combination
     for k, v in poscounts.items():
-        # sort in place to save memory
+        # Sort in place to save memory
         v.sort(key=lambda val: val[0])
-        # get the indexes of lists containing neighboring positions
+        # Get the indexes of lists containing neighboring positions
         for indexes in find_neighboring_indexes(v, max_distance):
-            # print(indexes)
-            # extract the cluster
             cs_cluster = v[indexes[0]:(indexes[-1] + 1)]
-            # the original list in the dict will be edited in place:
+            # The original list in the dict will be edited in place:
             cluster_neighboring_cleavage_sites(cs_cluster, max_distance)
-        # delete positions with 0 read number after clustering
+        # Delete positions with 0 read number after clustering
         poscounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
 
-    # write the result to disk in csv format
-    print('Writing to file...')
-    outfile = os.path.join(result_dir, outfile)
+    # Write the result to disk in csv format
+    print('Writing to output file ...')
     with open(outfile, 'w') as fout:
-        # write header
-        sample_string = ','.join([sam_file.split('.')[0]
-                                  for sam_file in sam_files])
-        fout.write('chromosome,strand,position,%s\n' % sample_string)
-        # write read counts for each cluster
+        # Write header
+        sample_string = ','.join([pass_file.split('.')[0].split('/')[-1]
+                                  for pass_file in pass_files])
+        fout.write(f'chromosome,strand,position,{sample_string}\n')
+        # Write read counts for each cluster
         for k in poscounts:
             chromosome, strand = k.split(':')
             for record in poscounts[k]:
                 position = str(record[0])
                 counts = ','.join([str(int(count)) for count
-                                   in record[1][:sam_file_num]])
-                fout.write('%s,%s,%s,%s\n' %
-                           (chromosome, strand, position, counts))
-               
+                                   in record[1][:file_num]])
+                fout.write(f'{chromosome},{strand},{position},{counts}\n')
+    print('Done!')
+
 def cluster_CS(infolders, outfolder, 
                cs_file_name = 'CS.all.reads.csv', 
                #direction = 'reverse', 
@@ -778,7 +777,7 @@ def cluster_CS(infolders, outfolder,
     print( 'Writing to file...')
     with open(os.path.join(outfolder, outfile), 'w') as fout:
         # write header        
-        #sample_string = ','.join([sam_file + '.num' for sam_file in sam_files])
+        #sample_string = ','.join([pass_file + '.num' for pass_file in pass_files])
         sample_string = ','.join(sample_names)
         fout.write('chromosome,strand,position,%s\n' %sample_string)
         # write read counts for each cluster
