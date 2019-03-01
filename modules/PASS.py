@@ -9,6 +9,10 @@ import os
 import re
 from pathlib import Path
 from subprocess import check_output
+import collections
+import itertools
+import numpy as np
+import pandas as pd
 
 
 class FastqRecord():
@@ -142,7 +146,7 @@ class FastqFile():
         return self.name
 
     def get_read_num(self):
-        if self.read_num == 0:
+        if not self.read_num:
             line_num = 0
             for _ in open(self.name): line_num += 1
             self.read_num = line_num//4      
@@ -365,7 +369,6 @@ def pick_unique_pass(pass_file, random_NT_len):
     Output:
     Unique PASS reads will be written to a new file.
     '''
-    import itertools
 
     output_file = pass_file.replace('.pass', '.unique.pass')
     fout = open(output_file, 'w')
@@ -399,17 +402,19 @@ def pick_unique_pass(pass_file, random_NT_len):
                     unique_ids.add(this_id)
                     fout.write(line)
 
-
+def count_sam(sam_file):
+    '''Count number or alignment records in a sam_file.'''
+    line_num = 0
+    for line in open(sam_file): 
+        if not line[0] == '@': line_num += 1
+    return line_num 
+    
 def count_5Ts(sam_dir):
     '''Count the number of reads with certain 5'T-stretch lengths for pass and 
     nopass reads in sam files in the sam_dir. Return a DataFrame.
     '''
     sample_names = []
     results = []  
-
-    import re
-    import numpy as np
-    import pandas as pd
 
     for sam_file in [filename for filename in os.listdir(sam_dir)
                      if re.search('Aligned.out.(no)?pass$', filename)]:
@@ -437,7 +442,7 @@ def count_5Ts(sam_dir):
 def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length = 5):
     '''Pick PASS reads with at least min_length mapped 5' Ts in pass_in and copy 
     them into the astretch_out file. '''
-    import re
+
     fout1 = open(astretch_out, 'w')
     fout2 = open(non_astretch_out, 'w')
     
@@ -464,8 +469,7 @@ def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length = 5):
 def count_unique_reads_in_folder(sam_dir, outfolder, 
                           outfile = 'unique_pass_num.csv'):
     '''Count number of pass and ref_pass reads in sam files in the pass_dir'''
-    from subprocess import check_output
-    import glob
+
     
     sample_names = []
     pass_nums = [] 
@@ -564,10 +568,10 @@ def cluster_neighboring_cleavage_sites(cs_cluster, max_distance):
                                                max_distance)
 
 
-def cluster_reads(pass_files,
-                  outfile='cluster.numbers.csv',
-                  direction='reverse',
-                  max_distance = 24):
+def cluster_pass_reads(pass_files,
+                       outfile='cluster.numbers.csv',
+                       direction='reverse',
+                       max_distance = 24):
     """
     Cluster PASS reads within max_distance.
 
@@ -580,9 +584,7 @@ def cluster_reads(pass_files,
     0, 0, 0, 56]}. The [list of int] saves the number of reads from each 
     pass_file. 
     """
-    import re
-    import collections
-    
+   
     print('Reading sam files containing PASS reads ...')
     file_num = len(pass_files)
     # Pattern for finding last mapped position (LM) in read names
@@ -618,7 +620,6 @@ def cluster_reads(pass_files,
 
     print('Clustering reads ...')
     # Calculate the normalized read numbers and attach to the read numbers
-    import pandas as pd
     df = pd.DataFrame(readcounts).T
     normalized = df / df.sum(0)
     df = pd.concat([df, normalized], axis = 1, ignore_index = True)
@@ -668,11 +669,10 @@ def cluster_reads(pass_files,
                 fout.write(f'{chromosome},{strand},{position},{counts}\n')
     print('Done!')
 
-def cluster_CS(infolders, outfolder, 
-               cs_file_name = 'CS.all.reads.csv', 
-               #direction = 'reverse', 
-               max_distance = 24,
-               outfile = 'meta.cluster.numbers.csv'):
+def cluster_CS_from_multiple_folders(infolders, outfolder, 
+                                     cs_file_name = 'CS.all.reads.csv', 
+                                     max_distance = 24,
+                                     outfile = 'meta.cluster.numbers.csv'):
     '''
     Read "CS.all.reads.csv" files (containing read numbers for each unclustered 
     cleavage site) in input folders. From each CS.all.reads.csv file, build a dict
@@ -683,20 +683,7 @@ def cluster_CS(infolders, outfolder,
     chromosome, strand, pos, num. Then recursively combine reads with LAP within 24 nt, 
     from pos with the highest read number to the pos with next highest read 
     number.''' 
-    '''
-    rootfolder = '../../result'
-    direction = 'reverse'
-    max_distance = 24
-    
-    import glob
-    for sam_in in sorted(glob.glob(os.path.join(pass_dir, '*pass.sam'))):
-        print(sam_in)
-    
-    '''
-    #import glob
-#    infolders = ['../../result/batch05', '../../result/batch06', 
-#                 '../../result/batch09', '../../result/batch13']
-            
+           
     #cs_files = [glob.glob(os.path.join(infolder, cs_file_name)) for infolder in infolders]
     cs_files = [os.path.join(infolder, cs_file_name) for infolder in infolders]
     # calculate the total number of columns and get sample names
@@ -710,7 +697,6 @@ def cluster_CS(infolders, outfolder,
     total_num_column = sum(num_column)        
     
     
-    import collections 
     # readcounts is a read id counter
     #example: {'chr9:-:100395423':[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]}
     readcounts = {} 
@@ -736,7 +722,6 @@ def cluster_CS(infolders, outfolder,
     
     # calculate the normalized read numbers and attach to the read numbers  
     print('Calculating RPMs...')
-    import pandas as pd
     df = pd.DataFrame(readcounts)    
     df = df.T
     normalized = df/df.sum(0)
@@ -894,7 +879,6 @@ def make_CLIP_url(project, batch, sam_dir, result_dir, genome_size,
         
         # normolize bedgraph counts     
         cmd = 'grep -v @ ' + sam_file + ' | wc -l'
-        from subprocess import check_output
         cmd_out = check_output(cmd, shell=True)
         totalReadNum = int(cmd_out.split(' ')[0]) 
         cmd = norm_bedgraph + '-t ' + str(totalReadNum) + ' -i "' + prefix + \
@@ -985,7 +969,6 @@ def make_RNAseq_url(project, batch, sam_dir, result_dir, genome_size,
         
         # normolize bedgraph counts     
         cmd = 'grep -v @ ' + sam_file + ' | wc -l'
-        from subprocess import check_output
         cmd_out = check_output(cmd, shell=True)
         totalReadNum = int(cmd_out.split(' ')[0]) 
         cmd = norm_bedgraph + '-t ' + str(totalReadNum) + ' -i "' + prefix + \
