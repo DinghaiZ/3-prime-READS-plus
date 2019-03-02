@@ -13,6 +13,8 @@ import collections
 import itertools
 import numpy as np
 import pandas as pd
+import seaborn as sns
+import multiprocessing as mp
 
 
 class FastqRecord():
@@ -60,16 +62,16 @@ class FastqRecord():
         # "TATCTCTTTTTTTTTTTTTTTTTGAAGGGCAGATTTAAAATACACTATTAAAATTATTAA"
         match1 = re.match('([ATCGN]{%d})(T*)' % randNT5, self.seq)
         T_length1 = len(match1.groups()[1])
-        if T_length1 > 1:
-            self.seq = self.seq[match1.end():]
-            self.qual = self.qual[match1.end():]
-            self.name = ''.join(['TS', 
-                                 str(T_length1),
-                                 match1.groups()[0], 
-                                 ':', 
-                                 self.name
-								 ])
-            self.trimmed5T = True
+        self.seq = self.seq[match1.end():]
+        self.qual = self.qual[match1.end():]
+        self.name = ''.join(['TS', 
+                             str(T_length1),
+                             match1.groups()[0], 
+                             ':', 
+                             self.name
+                             ])
+
+        if T_length1 > 0: self.trimmed5T = True
 
         # The second trimming step is needed to deal with reads like
         # "TATCTCTTTTATTTTTTTTTTTTGAAGGGCAGATTTAAAATACACTATTAAAATTATTAA"
@@ -228,7 +230,7 @@ def get_seq(chromosome, strand, start, end, genome):
         return seq
     
      
-def pick_PASS(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
+def split_sam(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
     '''Split a sam_file into PASS, noPASS, and spike-in sam files.
 
     Loop through records in the sam file, if the record is PASS, write to
@@ -253,7 +255,7 @@ def pick_PASS(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
     '''
     pass_file = open(sam_file.replace('.sam', '.pass'), 'w')
     nopass_file = open(sam_file.replace('.sam', '.nopass'), 'w')
-    if not spike_in: spike_in_file = open(sam_file.replace('.sam', '.spike_in'), 'w')
+    if spike_in: spike_in_file = open(sam_file.replace('.sam', '.spike_in'), 'w')
     
     lap = 0
 
@@ -263,7 +265,7 @@ def pick_PASS(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
             if line[0] == '@':
                 pass_file.write(line)
                 nopass_file.write(line)
-                if not spike_in: spike_in_file.write(line)
+                if spike_in: spike_in_file.write(line)
                 continue
             # Process each line
             (readname, flag, chromosome, position, mapq, cigar) = line.split()[:6]
@@ -274,7 +276,7 @@ def pick_PASS(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
             if mapq < min_mapq:
                 continue
             # Record reads mapped to spiked-in yeast genome 
-            if not spike_in and chromosome[:4] == spike_in:  
+            if spike_in and chromosome[:4] == spike_in:  
                 spike_in_file.write(line)
                 continue
             # Ignore reads mapped to other chromosomes, such as 'BK000964'
@@ -283,10 +285,9 @@ def pick_PASS(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
 
             # Extract the T-stretch length encoded in the readname
             match = re.match('TS(\d+)', line)
-            if match:
-                t_stretch_len = int(match.groups()[0])
+            t_stretch_len = int(match.groups()[0])
             # Skip records with short T-stretches
-            if not match or t_stretch_len < 2:
+            if t_stretch_len < 2:
                 nopass_file.write(line)
                 continue
 
@@ -314,11 +315,11 @@ def pick_PASS(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
                                          genome = genome)
                 lap = position
             else:
-                nopass_file.write(line)
                 continue
 
-            # If the 5' T-stretch was trimmed twice (like 'TTTTTTTGTTTT'),
-            # check whether GTTTT (reverse-compliment: AAAAC) comes from the genome
+            # If the 5' T-stretch was trimmed twice (like 'TTTTTTTGTTTT')
+            # and if GTTTT (reverse-compliment: AAAAC) comes from the genome,
+            # update the downstream_seq, lap, and t_stretch_len
             elements = readname.split('::')
             if len(elements) == 2:
                 elements[1] = elements[1].split(':')[0]   
@@ -336,7 +337,7 @@ def pick_PASS(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
                                               % (0, 0, lap))
                         continue
 
-            # Analyze downstream sequence
+            # Check if downstream sequence matches trimmed T-stretches 
             if not downstream_seq[:-1] == 'A' * (t_stretch_len - 1):
                 match = re.match('A+', downstream_seq)
                 matched_len = len(match.group()) if match else 0
@@ -347,12 +348,12 @@ def pick_PASS(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
                                     % (matched_len, t_stretch_len - matched_len, lap))
             else:
                 match = re.match('A*', downstream_seq)
-                matched_len = len(match.group())  # value: 1 ~ t_stretch_len
+                matched_len = len(match.group())  # value: t_stretch_len-1 or t_stretch_len
                 nopass_file.write(line.strip() + '\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
                                       % (matched_len, t_stretch_len - matched_len, lap))
     pass_file.close()
     nopass_file.close()
-    if not spike_in: spike_in_file.close()
+    if spike_in: spike_in_file.close()
     os.system('rm ' + sam_file)
 
 
@@ -369,15 +370,12 @@ def pick_unique_pass(pass_file, random_NT_len):
     Output:
     Unique PASS reads will be written to a new file.
     '''
-
     output_file = pass_file.replace('.pass', '.unique.pass')
     fout = open(output_file, 'w')
-    
     # Make a set to save unique ids
     unique_ids = set()
     # Precompile the search patter
     pattern = re.compile('TS(\d+[ATCGN]{%s})' % random_NT_len)
-
     with open(pass_file, 'r') as fin:
         for line in fin:
             if line[0] == '@':
@@ -402,101 +400,79 @@ def pick_unique_pass(pass_file, random_NT_len):
                     unique_ids.add(this_id)
                     fout.write(line)
 
+
 def count_sam(sam_file):
     '''Count number or alignment records in a sam_file.'''
     line_num = 0
     for line in open(sam_file): 
         if not line[0] == '@': line_num += 1
     return line_num 
+
+
+def count_5T_stretch(sam_file, max_TS = 25):
+    with open(sam_file, 'r') as fin:
+            fstring = fin.read()
+            # Search 5' T-strech patterns in the file
+            TS = re.findall('\nTS(\d+)', fstring)  
+            # Count number of different lengths (up to 30) of T-stretch
+            return [TS.count(str(i)) for i in range(max_TS + 1)]  
+
+
+def summarize_5T_stretch(sam_files, processes, max_TS = 25):
+    '''Calculate the distribution of un-aligned 5'T-stretch lengths for records 
+    in sam_files, using multiple threads. 
     
-def count_5Ts(sam_dir):
-    '''Count the number of reads with certain 5'T-stretch lengths for pass and 
-    nopass reads in sam files in the sam_dir. Return a DataFrame.
+    Arguments:
+    
+    sam_files: a list of pass file names or nonpass file names.
+    max_TS: maximum T-stretch length that you care about
+    processes: number of threads for parallel computation
+    
+    Output:
+    A DataFrame with T-stretch length as row index, sample names as column names, and values as number of
+    counts of each T-stretch length for each sample. 
     '''
-    sample_names = []
+    sample_names = [re.search('.+\/(.+?)\.Aligned.+pass', sam_file).groups()[0] 
+                    for sam_file in sam_files]
+    # Use multi-processes to count T-stretch lengthes in multiple files
+    with mp.Pool(processes = processes) as pool: 
+        TS_counts = pool.starmap(count_5T_stretch, 
+                                 zip(sam_files, [max_TS]*len(sam_files)))
+    # Create DataFrame
+    df = np.array(TS_counts).T
+    df = pd.DataFrame(data = df, columns = sample_names)
+    df.index.name = 'T_Stretch_Length'
+    return df
+
+
+def summarize_5T_stretch_serial(sam_files, max_TS = 30):
+    '''Calculate the distribution of un-aligned 5'T-stretch lengths for records 
+    in sam_files, using just one thread. 
+    
+    Arguments:
+    'sam_files' is a list of pass file names or nonpass file names.
+    'max_TS': maximum T-stretch length that you care about
+    Returns the result as a DataFrame.
+    '''
     results = []  
-
-    for sam_file in [filename for filename in os.listdir(sam_dir)
-                     if re.search('Aligned.out.(no)?pass$', filename)]:
-        file_in = os.path.join(sam_dir, sam_file)
-        sample_names.append(sam_file.split(
-            '.')[0] + '.' + sam_file.split('.')[-1])
-
-        with open(file_in, 'r') as f:
-            string = f.read()
-            # search patterns in the file
-            TS = re.findall('\nTS(\d+)', string)  # 5' t-strech
-            # count number of different lengths of T-stretch
-            TS = [TS.count(str(i)) for i in range(51)]  # 50 sequencing cycles
-            # save the result
+    sample_names = [re.search('.+\/(.+?)\.Aligned.+pass', sam_file).groups()[0] 
+                    for sam_file in sam_files]
+    for sam_file in sam_files:
+        with open(sam_file, 'r') as fin:
+            fstring = fin.read()
+            # Search 5' T-strech patterns in the file
+            TS = re.findall('\nTS(\d+)', fstring)  
+            # Count number of different lengths (up to 30) of T-stretch
+            TS = [TS.count(str(i)) for i in range(max_TS + 1)]  
             results.append(TS)
-
-    # create DataFrame
-    TS = np.array(results).T
-    TS = np.insert(TS, 0, values=np.arange(51), axis=1)  # insert T length
-    TS = pd.DataFrame(data=TS, columns=['T_Stretch_Length'] + sample_names)
-
-    return TS
+    # Create DataFrame
+    df = np.array(results).T
+    df = pd.DataFrame(data = df, columns = sample_names)
+    df.index.name = 'T_Stretch_Length'
+    return df
 
 
-def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length = 5):
-    '''Pick PASS reads with at least min_length mapped 5' Ts in pass_in and copy 
-    them into the astretch_out file. '''
-
-    fout1 = open(astretch_out, 'w')
-    fout2 = open(non_astretch_out, 'w')
-    
-    with open(pass_in, 'r') as fin:
-        # process each line       
-        for line in fin:
-            # skip header
-            if line[0] == '@': 
-                fout1.write(line)
-                fout2.write(line)
-                continue
-            # read the length of matched T-stretches
-            ML = int(re.search('ML:i:(\d+)\t', line).group(1))
-            if ML >= min_length:
-                fout1.write(line)
-            else:
-                fout2.write(line)
-                
-    fout1.close()
-    fout2.close()
-
-
-
-def count_unique_reads_in_folder(sam_dir, outfolder, 
-                          outfile = 'unique_pass_num.csv'):
-    '''Count number of pass and ref_pass reads in sam files in the pass_dir'''
-
-    
-    sample_names = []
-    pass_nums = [] 
-    ref_nums = []
-    
-    # count pass reads 
-    for file_name in sorted(glob.glob(os.path.join(sam_dir, '*.pass.unique.sam'))):
-        sample_names.append(file_name.split('/')[-1].split('.')[0])
-        cmd = 'grep -v @ ' + file_name + ' | wc -l'
-        cmd_out = check_output(cmd, shell=True)
-        pass_nums.append(cmd_out.strip())
-    
-    # count reference reads 
-    for file_name in sorted(glob.glob(os.path.join(sam_dir, '*.ref.unique.sam'))):
-        cmd = 'grep -v @ ' + file_name + ' | wc -l'
-        cmd_out = check_output(cmd, shell=True)
-        ref_nums.append(cmd_out.strip())
-   
-    # combine
-    records = zip(sample_names, pass_nums, ref_nums)
-    with open(os.path.join(outfolder, outfile), 'w') as f:
-        f.write('Sample, uPASS, uRef\n')
-        for rec in records:
-            f.write('%s,%s,%s\n' % rec)
-   
-  
-def find_neighboring_indexes(v, max_distance):
+def find_nearby_indexes(v, max_distance):
     """ 
     Yield the indexes of lists containing neighboring positions
     
@@ -518,7 +494,7 @@ def find_neighboring_indexes(v, max_distance):
             index_list = []
 
 
-def cluster_neighboring_cleavage_sites(cs_cluster, max_distance):
+def cluster_nearby_cleavage_sites(cs_cluster, max_distance):
     """
     Recursively merge the CS in the cluster using a devide and conqurer algorithm
     Neighboring positions located within max_distance from each other are merged. 
@@ -561,10 +537,10 @@ def cluster_neighboring_cleavage_sites(cs_cluster, max_distance):
                 right_index = max(right_index, j)
         # Devide and conqure
         if left_index > 0:
-            cluster_neighboring_cleavage_sites(cs_cluster[:left_index],
+            cluster_nearby_cleavage_sites(cs_cluster[:left_index],
                                                max_distance)
         if right_index < len(cs_cluster) - 1:
-            cluster_neighboring_cleavage_sites(cs_cluster[right_index + 1:],
+            cluster_nearby_cleavage_sites(cs_cluster[right_index + 1:],
                                                max_distance)
 
 
@@ -584,7 +560,6 @@ def cluster_pass_reads(pass_files,
     0, 0, 0, 56]}. The [list of int] saves the number of reads from each 
     pass_file. 
     """
-   
     print('Reading sam files containing PASS reads ...')
     file_num = len(pass_files)
     # Pattern for finding last mapped position (LM) in read names
@@ -645,10 +620,10 @@ def cluster_pass_reads(pass_files,
         # Sort in place to save memory
         v.sort(key=lambda val: val[0])
         # Get the indexes of lists containing neighboring positions
-        for indexes in find_neighboring_indexes(v, max_distance):
+        for indexes in find_nearby_indexes(v, max_distance):
             cs_cluster = v[indexes[0]:(indexes[-1] + 1)]
             # The original list in the dict will be edited in place:
-            cluster_neighboring_cleavage_sites(cs_cluster, max_distance)
+            cluster_nearby_cleavage_sites(cs_cluster, max_distance)
         # Delete positions with 0 read number after clustering
         poscounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
 
@@ -668,6 +643,86 @@ def cluster_pass_reads(pass_files,
                                    in record[1][:file_num]])
                 fout.write(f'{chromosome},{strand},{position},{counts}\n')
     print('Done!')
+
+        
+def sam2bigwig(sam_file, samtools, genomeCoverageBed, 
+               genome_size, bedGraphToBigWig):
+    # the sam2bigwid() function cannot be defined within make_url().
+    # functions are only picklable if they are defined at the top-level of a module.
+
+    prefix = sam_file.split('.')[0]
+    
+    # sam -> bam
+    cmd = f'{samtools} view -uS {sam_file} | {samtools} sort - {prefix}'
+    os.system(cmd)
+
+    # bam -> bedGraph
+    totalReadNum = count_sam(sam_file)
+    cmd = (f'{genomeCoverageBed} -bg -split -ibam {prefix}.bam -strand + -g '
+           f'{genome_size} -scale {str(-10**6/totalReadNum)} > '
+           f'{prefix}.m.bedgraph'
+          )
+    os.system(cmd)
+    cmd = (f'{genomeCoverageBed} -bg -split -ibam {prefix}.bam -strand - -g '
+           f'{genome_size} -scale {str(10**6/totalReadNum)} > '
+           f'{prefix}.p.bedgraph'
+          )
+    os.system(cmd)
+
+    # bedgraph -> bigWig
+    cmd = f'{bedGraphToBigWig} {prefix}.p.bedgraph {genome_size} {prefix}.p.bw'
+    os.system(cmd)
+    cmd = f'{bedGraphToBigWig} {prefix}.m.bedgraph {genome_size} {prefix}.m.bw'
+    os.system(cmd)
+
+    # Remove intermediate files
+    cmd = f'rm {prefix}*.bam'
+    os.system(cmd)
+    cmd = f'rm {prefix}*bedgraph*'
+    os.system(cmd)
+
+
+def make_url(project, experiment, sam_dir, sam_files, samtools, genome_size, 
+             genomeCoverageBed, bedGraphToBigWig, sample_description, processes):
+    '''sam -> bam -> bigwig
+    ''' 
+    # Create bigWig files by parallel computing
+    l = len(sam_files)
+    with mp.Pool(processes = processes) as pool:
+        pool.starmap(sam2bigwig, zip(sam_files, 
+                                     [samtools]*l, 
+                                     [genomeCoverageBed]*l, 
+                                     [genome_size]*l, 
+                                     [bedGraphToBigWig]*l))
+    bw_files = sorted([str(bw_file) for bw_file in sam_dir.glob('*.bw')])
+    bw_samples = sorted(list(set([filename.split('.')[0].split('/')[-1] 
+                                  for filename in bw_files])))
+
+    # Calculate colors
+    if 'genome_browser_track_color' in sample_description.columns:
+        color_max = sample_description.genome_browser_track_color.max(axis=0)
+    else:
+        color_max = sample_description.shape[0]
+    colors = np.array(sns.color_palette("colorblind", color_max))*255
+    
+    # Create UCSC genome browser tracks
+    strand2str = {'+': 'p', '-': 'm'}
+    f = open(sam_dir/'bigwigCaller.txt', 'w')
+    for strand in ['+', '-']:
+        for sample in bw_samples:
+            color = colors[sample_description[sample_description['sample'] == 
+                                    sample].genome_browser_track_color - 1, ][0]
+            color = ','.join([str(int(c)) for c in color])
+            track = (f'track type=bigWig visibility=2 alwaysZero=on color={color} '
+                     f'graphType=bar maxHeightPixels=30:30:30 itemRgb=On group='
+                     f'{project} name="{sample}{strand}" '
+                     f'description="{sample}{strand}" '
+                     f'bigDataUrl=http://intron.njms.rutgers.edu/zhengdh/bigwig/'
+                     f'{project}/{experiment}/{sample}.{strand2str[strand]}.bw\n'
+                    )
+            f.write(track)
+    f.close()
+
 
 def cluster_CS_from_multiple_folders(infolders, outfolder, 
                                      cs_file_name = 'CS.all.reads.csv', 
@@ -695,7 +750,6 @@ def cluster_CS_from_multiple_folders(infolders, outfolder,
             num_column.append(len(samples))
             sample_names += samples
     total_num_column = sum(num_column)        
-    
     
     # readcounts is a read id counter
     #example: {'chr9:-:100395423':[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]}
@@ -749,12 +803,12 @@ def cluster_CS_from_multiple_folders(infolders, outfolder,
         # sort in place to save memory
         v.sort(key = lambda val: val[0]) 
         # get the indexes of lists containing neighboring positions
-        for indexes in find_neighboring_indexes(v, max_distance):
+        for indexes in find_nearby_indexes(v, max_distance):
             #print(indexes)            
             # extract the cluster
             cs_cluster = v[indexes[0]:(indexes[-1]+1)]
             # the original list in the dict will be edited in place:
-            cluster_neighboring_cleavage_sites(cs_cluster, max_distance)
+            cluster_nearby_cleavage_sites(cs_cluster, max_distance)
         # delete positions with 0 read number after clustering
         poscounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
     
@@ -772,269 +826,29 @@ def cluster_CS_from_multiple_folders(infolders, outfolder,
                 position = str(record[0])
                 counts = ','.join([str(int(count)) for count in record[1][:total_num_column]])
                 fout.write('%s,%s,%s,%s\n'%(chromosome, strand, position, counts))
-                
-        
-# the sam2bigwid() function cannot be defined within make_url().
-# functions are only picklable if they are defined at the top-level of a module.
-def sam2bigwig(sam_file):
-    prefix = sam_file.split('.')[0]
-    sam_file = os.path.join(sam_dir, sam_file)
-    prefix = os.path.join(sam_dir, prefix)
+ 
 
-    # sam -> bam
-    cmd = samtools + ' view -uS ' + sam_file + ' | ' + samtools + \
-        ' sort - ' + prefix
-    # print(cmd)
-    os.system(cmd)
+def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length = 5):
+    '''Pick PASS reads with at least min_length mapped 5' Ts in pass_in and copy 
+    them into the astretch_out file. '''
 
-    # bam -> bedGraph
-    totalReadNum = count_pass(sam_file)[1]
-    cmd = genomeCoverageBed + '-bg -split -ibam ' + prefix + '.bam ' + \
-        '-strand + -g ' + genome_size + ' -scale ' + str(-10**6/totalReadNum) + \
-        ' > ' + prefix + '.m.bedgraph'
-    # print(cmd)
-    os.system(cmd)
-    cmd = genomeCoverageBed + '-bg -split -ibam ' + prefix + '.bam ' + \
-        '-strand - -g ' + genome_size + ' -scale ' + str(10**6/totalReadNum) + \
-        ' > ' + prefix + '.p.bedgraph'
-    #print(cmd)
-    os.system(cmd)
-
-    # bedgraph -> bigWig
-    cmd = bedGraphToBigWig + prefix + '.p.bedgraph ' + \
-        genome_size + ' ' + prefix + '.p.bw'
-    # print(cmd)
-    os.system(cmd)
-    cmd = bedGraphToBigWig + prefix + '.m.bedgraph ' + \
-        genome_size + ' ' + prefix + '.m.bw'
-    # print(cmd)
-    os.system(cmd)
-
-    # remove intermediate files
-    cmd = 'rm ' + prefix + '*.bam'
-    os.system(cmd)
-    cmd = 'rm ' + prefix + '*bedgraph*'
-    os.system(cmd)
-
-
-# sam -> bam -> bigwig
-def make_url(project, experiment, sam_dir, genome_size, genomeCoverageBed,
-             bedGraphToBigWig):
-    from subprocess import check_output
-
-    # parallel computing
-    sam_files = sorted(glob.glob(os.path.join(sam_dir, '*.Aligned.out.pass')))
-    with mp.Pool(processes=processes) as pool:
-        pool.map(sam2bigwig, sam_files)
-
-    # create UCSC genome browser tracks
-    bw_files = [filename for filename in os.listdir(sam_dir)
-                if filename.endswith('.bw')]
-    bw_samples = sorted(list(set([filename.split('.')[0]
-                                  for filename in bw_files])))
-
-    strand2str = {'+': 'p', '-': 'm'}
-    f = open(os.path.join(sam_dir, 'bigwigCaller.txt'), 'w')
-    for strand in ['+', '-']:
-        for (i, sample) in enumerate(bw_samples):
-            name = sample
-            color = list(colors)[int(sample_color[sample]) - 1]
-            track = 'track type=bigWig visibility=2 alwaysZero=on color=' + \
-                color + ' graphType=bar maxHeightPixels=30:30:30 itemRgb=On group=' + \
-                project + ' name="' + name + strand + '" description="' + name + ' ' + \
-                strand + '" bigDataUrl=http://intron.njms.rutgers.edu/zhengdh/bigwig/' + \
-                project + '/' + experiment + '/' + sample + '.' + strand2str[strand] + \
-                '.bw' + '\n'
-            f.write(track)
-    f.close()
-
-
-
-
-# sam -> bam -> bigwig
-def make_CLIP_url(project, batch, sam_dir, result_dir, genome_size, 
-             genomeCoverageBed, norm_bedgraph, bedGraphToBigWig):
-    for sam_file in [filename for filename in os.listdir(sam_dir) 
-    if re.search('\.sam$', filename)]:
-        prefix = sam_file.split('.')[0]    
-        sam_file = os.path.join(sam_dir, sam_file)
-        #prefix = re.sub('\.sam$', '', sam_file)
-        prefix = os.path.join(sam_dir, prefix)
-        cmd = 'samtools view -uS ' + sam_file + ' | ' + 'samtools sort - ' + prefix # why need "-"?
-        print( cmd)
-        os.system(cmd)
-        # I got the warning: [bam_header_read] EOF marker is absent. The input is probably truncated.
-        # The warning should be ignored. Using samtools view -u gives uncompressed bam, and these do not have the EOF marker. 
+    fout1 = open(astretch_out, 'w')
+    fout2 = open(non_astretch_out, 'w')
     
-        
-        # bam to bigwig 
-        cmd = genomeCoverageBed + '-bg -split -ibam ' + prefix + '.bam ' + \
-        '-strand + -g ' + genome_size + ' > ' + prefix + '.p.bedgraph'  # + strand: "p", different from 3'READS+, which is reverse sequenced
-        print( cmd)
-        os.system(cmd)
-        cmd = genomeCoverageBed + '-bg -split -ibam ' + prefix + '.bam ' + \
-        '-strand - -g ' + genome_size + ' > ' + prefix + '.m.bedgraph' # - strand: "m", different from 3'READS+, which is reverse sequenced
-        print( cmd)
-        os.system(cmd)
-        
-        # normolize bedgraph counts     
-        cmd = 'grep -v @ ' + sam_file + ' | wc -l'
-        cmd_out = check_output(cmd, shell=True)
-        totalReadNum = int(cmd_out.split(' ')[0]) 
-        cmd = norm_bedgraph + '-t ' + str(totalReadNum) + ' -i "' + prefix + \
-        '.p.bedgraph ' + prefix + '.m.bedgraph"' #+ ' -m "' + prefix + '.p.bedgraph"'
-        print( cmd)
-        os.system(cmd)
-                
-        # convert to bw
-        cmd = bedGraphToBigWig + prefix + '.p.bedgraph.normolized ' + \
-        genome_size + ' ' + prefix + '.p.bw'
-        print( cmd)
-        os.system(cmd)
-        cmd = bedGraphToBigWig + prefix + '.m.bedgraph.normolized ' + \
-        genome_size + ' ' + prefix + '.m.bw'
-        print( cmd)
-        os.system(cmd)
-        
-        # remove intermediate files
-        #cmd = 'rm ' + prefix + '*.bam'
-        #os.system(cmd)
-        cmd = 'rm ' + prefix + '*bedgraph*'
-        os.system(cmd)
-    # copy the bigwig files to the http-enabled intron server
-    #cmd = 'scp ' + os.path.join(pass_dir, '*.bw') + ' zhengdh@intron.njms.rutgers.edu:~/../www/zhengdh/bigwig/' + project 
-    #os.system(cmd)
-    
-    # record sample names for the bw files
-    bw_files = [filename for filename in os.listdir(sam_dir) 
-    if filename.endswith('.bw')]
-    bw_samples = sorted(list(set([filename.split('.')[0] for filename in bw_files])))
-    #bw_samples.sort(key = lambda x: x[-1])
-    
-    #cmd = 'rm ' + os.path.join(pass_dir, '*.bw')
-    
-    # 
-    
-    f = open(os.path.join(result_dir, 'bigwigCaller.txt'), 'w')
-    for strand in ['+', '-']:
-        for (i, sample) in enumerate(bw_samples):
-            #name = sample.replace('spikein', '') + '_' + batch
-            name = sample
-            # default:
-            strand2str = {'+': 'p', '-':'m'}
-            if 'R_' in name: # AdiPR_HuR, meaning that the library is reverse sequenced
-                strand2str = {'+': 'm', '-':'p'}
-            #print( i, sample)
-            color = '000,000,255'
-            #if sample.startswith('AS'):
-            if re.search('AS', sample):
-                color = '255,000,000'
-            elif re.search('HP', sample):
-                color = '255, 100,000'
-                
-            track = 'track type=bigWig visibility=2 alwaysZero=on color=' + \
-            color +' graphType=bar maxHeightPixels=30:30:30 itemRgb=On group=' + \
-            project + ' name="' + name \
-             + strand + '" description=\"CLIP"' + \
-             ' bigDataUrl=http://intron.njms.rutgers.edu/zhengdh/bigwig/' + \
-             project + '/' + batch + '/' + sample + '.' + strand2str[strand] + '.bw' + '\n'
-            f.write(track)
-    f.close()     
+    with open(pass_in, 'r') as fin:
+        # process each line       
+        for line in fin:
+            # skip header
+            if line[0] == '@': 
+                fout1.write(line)
+                fout2.write(line)
+                continue
+            # read the length of matched T-stretches
+            ML = int(re.search('ML:i:(\d+)\t', line).group(1))
+            if ML >= min_length:
+                fout1.write(line)
+            else:
+                fout2.write(line)
+    fout1.close()
+    fout2.close()
 
-# sam -> bam -> bigwig
-def make_RNAseq_url(project, batch, sam_dir, result_dir, genome_size, 
-             genomeCoverageBed, norm_bedgraph, bedGraphToBigWig):
-    for sam_file in [filename for filename in os.listdir(sam_dir) 
-    if re.search('\.sam$', filename)]:
-        prefix = sam_file.split('.')[0]    
-        sam_file = os.path.join(sam_dir, sam_file)
-        #prefix = re.sub('\.sam$', '', sam_file)
-        prefix = os.path.join(sam_dir, prefix)
-        cmd = 'samtools view -uS ' + sam_file + ' | ' + 'samtools sort - ' + prefix # why need "-"?
-        print( cmd)
-        os.system(cmd)
-        # I got the warning: [bam_header_read] EOF marker is absent. The input is probably truncated.
-        # The warning should be ignored. Using samtools view -u gives uncompressed bam, and these do not have the EOF marker. 
-    
-        
-        # bam to bigwig 
-        cmd = genomeCoverageBed + '-bg -split -ibam ' + prefix + '.bam ' + \
-        '-strand + -g ' + genome_size + ' > ' + prefix + '.p.bedgraph'  # + strand: "p", different from 3'READS+, which is reverse sequenced
-        print( cmd)
-        os.system(cmd)
-        cmd = genomeCoverageBed + '-bg -split -ibam ' + prefix + '.bam ' + \
-        '-strand - -g ' + genome_size + ' > ' + prefix + '.m.bedgraph' # - strand: "m", different from 3'READS+, which is reverse sequenced
-        print( cmd)
-        os.system(cmd)
-        
-        # normolize bedgraph counts     
-        cmd = 'grep -v @ ' + sam_file + ' | wc -l'
-        cmd_out = check_output(cmd, shell=True)
-        totalReadNum = int(cmd_out.split(' ')[0]) 
-        cmd = norm_bedgraph + '-t ' + str(totalReadNum) + ' -i "' + prefix + \
-        '.p.bedgraph ' + prefix + '.m.bedgraph"' #+ ' -m "' + prefix + '.p.bedgraph"'
-        print( cmd)
-        os.system(cmd)
-                
-        # convert to bw
-        cmd = bedGraphToBigWig + prefix + '.p.bedgraph.normolized ' + \
-        genome_size + ' ' + prefix + '.p.bw'
-        print( cmd)
-        os.system(cmd)
-        cmd = bedGraphToBigWig + prefix + '.m.bedgraph.normolized ' + \
-        genome_size + ' ' + prefix + '.m.bw'
-        print( cmd)
-        os.system(cmd)
-        
-        # remove intermediate files
-        #cmd = 'rm ' + prefix + '*.bam'
-        #os.system(cmd)
-        cmd = 'rm ' + prefix + '*bedgraph*'
-        os.system(cmd)
-    # copy the bigwig files to the http-enabled intron server
-    #cmd = 'scp ' + os.path.join(pass_dir, '*.bw') + ' zhengdh@intron.njms.rutgers.edu:~/../www/zhengdh/bigwig/' + project 
-    #os.system(cmd)
-    
-    # record sample names for the bw files
-    bw_files = [filename for filename in os.listdir(sam_dir) 
-    if filename.endswith('.bw')]
-    bw_samples = sorted(list(set([filename.split('.')[0] for filename in bw_files])))
-    #bw_samples.sort(key = lambda x: x[-1])
-    
-    #cmd = 'rm ' + os.path.join(pass_dir, '*.bw')
-    
-    # 
-    
-    f = open(os.path.join(result_dir, 'bigwigCaller.txt'), 'w')
-    for strand in ['+', '-']:
-        for (i, sample) in enumerate(bw_samples):
-            #name = sample.replace('spikein', '') + '_' + batch
-            name = sample
-            # default:
-            #strand2str = {'+': 'p', '-':'m'} # forward sequencing
-            strand2str = {'+': 'm', '-':'p'} # reverse sequencing
-#            if 'R_' in name: # AdiPR_HuR, meaning that the library is reverse sequenced
-#                strand2str = {'+': 'm', '-':'p'}
-            #print( i, sample)
-            color = '000,000,255'
-            #if sample.startswith('AS'):
-            if re.search('AS', sample):
-                color = '255,000,000'
-            elif re.search('HP', sample):
-                color = '255,100,000'
-                
-            track = 'track type=bigWig visibility=2 alwaysZero=on color=' + \
-            color +' graphType=bar maxHeightPixels=30:30:30 itemRgb=On group=' + \
-            project + ' name="' + name \
-             + strand + '" description=\"CLIP"' + \
-             ' bigDataUrl=http://intron.njms.rutgers.edu/zhengdh/bigwig/' + \
-             project + '/' + batch + '/' + sample + '.' + strand2str[strand] + '.bw' + '\n'
-            f.write(track)
-    f.close()  
-    
-
-
-
-def prcmd(cmd):
-    print ("Command to run:", cmd, "\n")        
-    os.system(cmd) 
