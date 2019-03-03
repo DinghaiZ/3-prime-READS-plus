@@ -189,8 +189,8 @@ def count_fastq(filename):
 
 
 def trim_write_count_fastq(filename, randNT5, randNT3):
-    '''A function for trimming and writing fastq records. 
-    Also counts fastq records in input and output files.
+    '''A function for trimming and writing fastq records. Also counts fastq 
+    records in input and output files.
     '''
     FF = FastqFile(filename, randNT5, randNT3)
     FF.create_trimmed_fastq_file()
@@ -358,8 +358,7 @@ def split_sam(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
 
 
 def pick_unique_pass(pass_file, random_NT_len):
-    '''
-    Use the TS\d+[ATCG]{random_NT_len} string in read name and chromosome, flag,
+    '''Use the TS\d+[ATCG]{random_NT_len} string in read name and chromosome, flag,
     and LM tags to remove potential PCR duplicates. 
     
     Arguments:
@@ -429,8 +428,8 @@ def summarize_5T_stretch(sam_files, processes, max_TS = 25):
     processes: number of threads for parallel computation
     
     Output:
-    A DataFrame with T-stretch length as row index, sample names as column names, and values as number of
-    counts of each T-stretch length for each sample. 
+    A DataFrame with T-stretch length as row index, sample names as column names, 
+    and values as number of counts of each T-stretch length for each sample. 
     '''
     sample_names = [re.search('.+\/(.+?)\.Aligned.+pass', sam_file).groups()[0] 
                     for sam_file in sam_files]
@@ -494,10 +493,11 @@ def find_nearby_indexes(v, max_distance):
             index_list = []
 
 
-def cluster_nearby_cleavage_sites(cs_cluster, max_distance):
+def cluster_nearby_clusters(cs_cluster, max_distance):
     """
-    Recursively merge the CS in the cluster using a devide and conqurer algorithm
-    Neighboring positions located within max_distance from each other are merged. 
+    Recursively merge neighboring clusters using a devide and conqurer algorithm
+    Neighboring positions located within max_distance from the peak cluster with 
+    max RPM merged into the peak cluster. 
 
     Arguments:
     cs_cluster is like:[position, [num in pass_files]] (Ordered by position)
@@ -513,6 +513,7 @@ def cluster_nearby_cleavage_sites(cs_cluster, max_distance):
     for i in range(len(cs_cluster))[:-1]:
         if cs_cluster[i + 1][0] - cs_cluster[i][0] <= max_distance:
             clustered = False
+
     if clustered == True:
         return True
     # When the clustering is not completed:
@@ -528,7 +529,7 @@ def cluster_nearby_cleavage_sites(cs_cluster, max_distance):
                     abs(pos - cs_cluster[i][0]) > 0:
                 # Combine the read numbers for two CS, sample by sample
                 # cs_cluster[i] is like
-                # [155603471, [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]]
+                #              [155603471, [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]]
                 # nums is like [0, 0, 0, 0, 0, 5, 1, 0, 0, 0, 0, 0]
                 cs_cluster[i][1] = [sum(x)
                                     for x in zip(cs_cluster[i][1], nums)]
@@ -537,16 +538,53 @@ def cluster_nearby_cleavage_sites(cs_cluster, max_distance):
                 right_index = max(right_index, j)
         # Devide and conqure
         if left_index > 0:
-            cluster_nearby_cleavage_sites(cs_cluster[:left_index],
+            cluster_nearby_clusters(cs_cluster[:left_index],
                                                max_distance)
         if right_index < len(cs_cluster) - 1:
-            cluster_nearby_cleavage_sites(cs_cluster[right_index + 1:],
+            cluster_nearby_clusters(cs_cluster[right_index + 1:],
                                                max_distance)
+
+def _dict_to_clustered_dict(readcounts, max_distance):
+    '''Converts a dict of readcount into a dict of clustered readcount.
+    
+    This function is only meant to be called by cluster_pass_reads() and
+    cluster_cleavage_sites().
+
+    Arguments:
+    readcounts, a dict containing something like:
+    'chr11:+:31270274': [6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    '''
+    # Calculate the normalized read numbers and attach to the read numbers
+    df = pd.DataFrame(readcounts).T
+    normalized = df / df.sum(0)
+    df = pd.concat([df, normalized], axis = 1, ignore_index = True)
+    readcounts = df.T.to_dict('list')
+    # Separate positions based on chrmosome & strand combination
+    cpcounts = collections.defaultdict(list)
+    while len(readcounts) > 0:
+        k, v = readcounts.popitem()  
+        k = k.split(':')
+        cpcounts[':'.join(k[:2])].append([int(k[2]), v]) 
+        # cpcounts.popitem() is like
+        # {'chr9:-':[[100395423, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]],...]}
+    del readcounts
+    # Sort the list of lists for each chromosome & strand combination
+    for k, v in cpcounts.items():
+        # Sort in place to save memory
+        v.sort(key=lambda val: val[0])
+        # Get the indexes of lists containing neighboring positions
+        for indexes in find_nearby_indexes(v, max_distance):
+            cs_cluster = v[indexes[0]:(indexes[-1] + 1)]
+            # The original list in the dict will be edited in place:
+            cluster_nearby_clusters(cs_cluster, max_distance)
+        # Delete positions with 0 read number after clustering
+        cpcounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
+    return cpcounts
 
 
 def cluster_pass_reads(pass_files,
-                       outfile='cluster.numbers.csv',
-                       direction='reverse',
+                       output = 'clusters.csv',
+                       direction = 'reverse',
                        max_distance = 24):
     """
     Cluster PASS reads within max_distance.
@@ -594,68 +632,159 @@ def cluster_pass_reads(pass_files,
         fin.close()
 
     print('Clustering reads ...')
-    # Calculate the normalized read numbers and attach to the read numbers
-    df = pd.DataFrame(readcounts).T
-    normalized = df / df.sum(0)
-    df = pd.concat([df, normalized], axis = 1, ignore_index = True)
-    readcounts = df.T.to_dict('list')
-    # readcount.popitem() may return something like:
-    #  ('chr11:+:31270274', [6.0, 7.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-    #  0.0, 0.0, 9.1427902698768829e-07,3.0861678694165542e-06, 0.0, 0.0 ...]),
-    # with the first 12 values being read counts and the next 12 values being 
-    # normalized read counts
+    # # Calculate the normalized read numbers and attach to the read numbers
+    # df = pd.DataFrame(readcounts).T
+    # normalized = df / df.sum(0)
+    # df = pd.concat([df, normalized], axis = 1, ignore_index = True)
+    # readcounts = df.T.to_dict('list')
+    # # readcount.popitem() may return something like:
+    # #  ('chr11:+:31270274', [6.0, 7.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+    # #  0.0, 0.0, 9.1427902698768829e-07,3.0861678694165542e-06, 0.0, 0.0 ...]),
+    # # with the first 12 values being read counts and the next 12 values being 
+    # # normalized read counts
 
-    # Separate positions based on chrmosome & strand combination
-    poscounts = collections.defaultdict(list)
-    while len(readcounts) > 0:
-        k, v = readcounts.popitem()  
-        k = k.split(':')
-        poscounts[':'.join(k[:2])].append([int(k[2]), v]) 
-        # poscounts.popitem() is like
-        # {'chr9:-':[[100395423, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]],...]}
-    del readcounts
+    # # Separate positions based on chrmosome & strand combination
+    # cpcounts = collections.defaultdict(list)
+    # while len(readcounts) > 0:
+    #     k, v = readcounts.popitem()  
+    #     k = k.split(':')
+    #     cpcounts[':'.join(k[:2])].append([int(k[2]), v]) 
+    #     # cpcounts.popitem() is like
+    #     # {'chr9:-':[[100395423, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]],...]}
+    # del readcounts
 
-    # Sort the list of lists for each chromosome & strand combination
-    for k, v in poscounts.items():
-        # Sort in place to save memory
-        v.sort(key=lambda val: val[0])
-        # Get the indexes of lists containing neighboring positions
-        for indexes in find_nearby_indexes(v, max_distance):
-            cs_cluster = v[indexes[0]:(indexes[-1] + 1)]
-            # The original list in the dict will be edited in place:
-            cluster_nearby_cleavage_sites(cs_cluster, max_distance)
-        # Delete positions with 0 read number after clustering
-        poscounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
+    # # Sort the list of lists for each chromosome & strand combination
+    # for k, v in cpcounts.items():
+    #     # Sort in place to save memory
+    #     v.sort(key=lambda val: val[0])
+    #     # Get the indexes of lists containing neighboring positions
+    #     for indexes in find_nearby_indexes(v, max_distance):
+    #         cs_cluster = v[indexes[0]:(indexes[-1] + 1)]
+    #         # The original list in the dict will be edited in place:
+    #         cluster_nearby_clusters(cs_cluster, max_distance)
+    #     # Delete positions with 0 read number after clustering
+    #     cpcounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
+
+    cpcounts = _dict_to_clustered_dict(readcounts, max_distance)
 
     # Write the result to disk in csv format
     print('Writing to output file ...')
-    with open(outfile, 'w') as fout:
+    with open(output, 'w') as fout:
         # Write header
         sample_string = ','.join([pass_file.split('.')[0].split('/')[-1]
                                   for pass_file in pass_files])
         fout.write(f'chromosome,strand,position,{sample_string}\n')
         # Write read counts for each cluster
-        for k in poscounts:
+        for k in cpcounts:
             chromosome, strand = k.split(':')
-            for record in poscounts[k]:
+            for record in cpcounts[k]:
                 position = str(record[0])
                 counts = ','.join([str(int(count)) for count
                                    in record[1][:file_num]])
                 fout.write(f'{chromosome},{strand},{position},{counts}\n')
     print('Done!')
 
-        
+
+def cluster_cleavage_sites(input_cs_files, output = 'meta.cluster.csv', 
+                           max_distance = 24):
+    '''Cluster cleavage sites from different cleavage site files (cs_files). 
+    
+    Arguments:
+    input_cs_files: A list of file names. Each input_cs_file should be a csv file 
+    with the following columns (in order): chromosome, strand, position, 
+        read_num_for_each_sample.
+    
+    Output:
+    A csv file with the following columns: chromosome, strand, position, 
+    read_num_for_each_sample(from all cs_files).''' 
+           
+    # Record number of columns and sample names from each input file
+    num_column = []
+    sample_names = []
+    for cs_file in input_cs_files:
+        with open(cs_file, 'r') as fin:
+            samples = fin.readline().strip().split(',')[3:]
+            num_column.append(len(samples))
+            sample_names += samples
+    total_num_column = sum(num_column)        
+    
+    # Loop through cleavage site (CS) files and get read numbers for each CS id   
+    readcounts = {}
+    for i, cs_file in enumerate(input_cs_files): 
+        print('Reading ' + cs_file)        
+        fin = open(cs_file, 'r')
+        for line in fin:
+            elements = line.strip().split(',')
+            if elements[0] == 'chromosome': # header
+                continue
+            chromosome, strand, position = elements[:3]
+            # Calculate cleavage site id
+            cs_id = ':'.join([chromosome, strand, position]) 
+            readcounts.setdefault(cs_id, [0]*total_num_column)
+            # Copy the read numbers to corresponding columns
+            readcounts[cs_id][sum(num_column[:i]):sum(num_column[:i+1])] = \
+                [int(x) for x in elements[3:]]
+        fin.close()
+    # readcounts example: 
+    # {'chr9:-:100395423':[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]}
+    
+    # # Calculate normalized read numbers and attach to the read numbers  
+    # print('Calculating RPMs...')
+    # df = pd.DataFrame(readcounts).T    
+    # normalized = df/df.sum(0)
+    # df = pd.concat([df, normalized], axis = 1, ignore_index = True)
+    # readcounts = df.T.to_dict('list')    
+    
+    # print( 'Clustering cleavage sites...')
+    # # Group positions and read numbers using chrmosome & strand combination
+    # cpcounts = collections.defaultdict(list)
+    # while len(readcounts) > 0:
+    #     k,v = readcounts.popitem() 
+    #     k = k.split(':')
+    #     cpcounts[':'.join(k[:2])].append([int(k[2]),v]) 
+    #     # cpcounts.popitem() returns something like:        
+    #     # {'chr9:-':[[100395423, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]],...]}
+    # del readcounts
+    
+    # # Sort the list of lists for each chromosome & strand combination    
+    # for k,v in cpcounts.items(): 
+    #     v.sort(key = lambda val: val[0]) 
+    #     # Get the indexes of lists containing neighboring positions
+    #     for indexes in find_nearby_indexes(v, max_distance):
+    #         # Extract the cluster
+    #         cs_cluster = v[indexes[0]:(indexes[-1]+1)]
+    #         # The original list in the dict will be edited in place:
+    #         cluster_nearby_clusters(cs_cluster, max_distance)
+    #     # Delete positions with 0 read number after clustering
+    #     cpcounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
+    
+    cpcounts = _dict_to_clustered_dict(readcounts, max_distance)
+    
+    # Write the result to disk in csv format   
+    print( 'Writing to file...')
+    with open(output, 'w') as fout:
+        sample_string = ','.join(sample_names)
+        fout.write('chromosome,strand,position,%s\n' %sample_string)
+        # Write read counts for each cluster
+        for k in cpcounts:
+            chromosome, strand = k.split(':')
+            for record in cpcounts[k]:
+                position = str(record[0])
+                counts = ','.join([str(int(count)) for count in 
+                                   record[1][:total_num_column]])
+                fout.write('%s,%s,%s,%s\n'%(chromosome, strand, position, counts))
+
+
 def sam2bigwig(sam_file, samtools, genomeCoverageBed, 
                genome_size, bedGraphToBigWig):
-    # the sam2bigwid() function cannot be defined within make_url().
-    # functions are only picklable if they are defined at the top-level of a module.
-
+    '''sam -> bam -> bigwig'''
+    # The sam2bigwid function cannot be defined within make_url, because
+    # functions are only picklable if they are defined at the top-level of 
+    # a module.
     prefix = sam_file.split('.')[0]
-    
     # sam -> bam
     cmd = f'{samtools} view -uS {sam_file} | {samtools} sort - {prefix}'
     os.system(cmd)
-
     # bam -> bedGraph
     totalReadNum = count_sam(sam_file)
     cmd = (f'{genomeCoverageBed} -bg -split -ibam {prefix}.bam -strand + -g '
@@ -668,13 +797,11 @@ def sam2bigwig(sam_file, samtools, genomeCoverageBed,
            f'{prefix}.p.bedgraph'
           )
     os.system(cmd)
-
     # bedgraph -> bigWig
     cmd = f'{bedGraphToBigWig} {prefix}.p.bedgraph {genome_size} {prefix}.p.bw'
     os.system(cmd)
     cmd = f'{bedGraphToBigWig} {prefix}.m.bedgraph {genome_size} {prefix}.m.bw'
     os.system(cmd)
-
     # Remove intermediate files
     cmd = f'rm {prefix}*.bam'
     os.system(cmd)
@@ -684,9 +811,8 @@ def sam2bigwig(sam_file, samtools, genomeCoverageBed,
 
 def make_url(project, experiment, sam_dir, sam_files, samtools, genome_size, 
              genomeCoverageBed, bedGraphToBigWig, sample_description, processes):
-    '''sam -> bam -> bigwig
-    ''' 
-    # Create bigWig files by parallel computing
+    '''Creates a file containing UCSC track records''' 
+    # Create bigWig files
     l = len(sam_files)
     with mp.Pool(processes = processes) as pool:
         pool.starmap(sam2bigwig, zip(sam_files, 
@@ -697,14 +823,12 @@ def make_url(project, experiment, sam_dir, sam_files, samtools, genome_size,
     bw_files = sorted([str(bw_file) for bw_file in sam_dir.glob('*.bw')])
     bw_samples = sorted(list(set([filename.split('.')[0].split('/')[-1] 
                                   for filename in bw_files])))
-
     # Calculate colors
     if 'genome_browser_track_color' in sample_description.columns:
         color_max = sample_description.genome_browser_track_color.max(axis=0)
     else:
         color_max = sample_description.shape[0]
     colors = np.array(sns.color_palette("colorblind", color_max))*255
-    
     # Create UCSC genome browser tracks
     strand2str = {'+': 'p', '-': 'm'}
     f = open(sam_dir/'bigwigCaller.txt', 'w')
@@ -723,110 +847,6 @@ def make_url(project, experiment, sam_dir, sam_files, samtools, genome_size,
             f.write(track)
     f.close()
 
-
-def cluster_CS_from_multiple_folders(infolders, outfolder, 
-                                     cs_file_name = 'CS.all.reads.csv', 
-                                     max_distance = 24,
-                                     outfile = 'meta.cluster.numbers.csv'):
-    '''
-    Read "CS.all.reads.csv" files (containing read numbers for each unclustered 
-    cleavage site) in input folders. From each CS.all.reads.csv file, build a dict
-    named readcounts like {'chr9:-:100395423':[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]}.
-    The [list of int] saves the number of reads from each CS.all.reads.csv file. 
-    dict is like sample_count[sample1(str)] = num_from_sample1(int)
-    Output a table with the following columns: 
-    chromosome, strand, pos, num. Then recursively combine reads with LAP within 24 nt, 
-    from pos with the highest read number to the pos with next highest read 
-    number.''' 
-           
-    #cs_files = [glob.glob(os.path.join(infolder, cs_file_name)) for infolder in infolders]
-    cs_files = [os.path.join(infolder, cs_file_name) for infolder in infolders]
-    # calculate the total number of columns and get sample names
-    num_column = []
-    sample_names = []
-    for cs_file in cs_files:
-        with open(cs_file, 'r') as fin:
-            samples = fin.readline().strip().split(',')[3:]
-            num_column.append(len(samples))
-            sample_names += samples
-    total_num_column = sum(num_column)        
-    
-    # readcounts is a read id counter
-    #example: {'chr9:-:100395423':[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]}
-    readcounts = {} 
-    # loop through cleavage site (CS) files and get read numbers for each CS id   
-    for s, cs_file in enumerate(cs_files): #s will be used as index
-        # read sam file, calculate read id, and count number of reads
-        print('Reading ' + cs_file)        
-        fin = open(cs_file, 'r')
-        for line in fin:
-            elements = line.strip().split(',')
-            if elements[0] == 'chromosome': # header
-                continue
-            chromosome, strand, position = elements[:3]
-            # calculate cleavage site id
-            cs_id = ':'.join([chromosome, strand, position]) 
-            # setdefault(key[, default])
-            # If key is in the dictionary, return its value. 
-            # If not, insert key with a value of default and return default. 
-            readcounts.setdefault(cs_id, [0]*total_num_column)
-            # Copy the read numbers to the right columns
-            readcounts[cs_id][sum(num_column[:s]):sum(num_column[:s+1])] = [int(x) for x in elements[3:]]
-        fin.close()
-    
-    # calculate the normalized read numbers and attach to the read numbers  
-    print('Calculating RPMs...')
-    df = pd.DataFrame(readcounts)    
-    df = df.T
-    normalized = df/df.sum(0)
-    df = pd.concat([df, normalized], axis = 1, ignore_index = True)
-    readcounts = df.T.to_dict('list')    
-    # readcount.popitem() may return something like:
-    #  ('chr11:+:31270274', [6.0, 7.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
-    #  0.0, 0.0, 9.1427902698768829e-07,3.0861678694165542e-06, 0.0, 0.0 ...]),
-    # with the first 12 values as read counts and the next 12 values as normalized
-    # read counts
-    
-    print( 'Clustering cleavage sites...')
-    # separate positions based on chrmosome & strand combination
-    poscounts = collections.defaultdict(list)
-    while len(readcounts) > 0:
-        k,v = readcounts.popitem() # saves memory
-        k = k.split(':')
-        poscounts[':'.join(k[:2])].append([int(k[2]),v]) # don't forget int()!!!
-        # poscounts.popitem()        
-        #example: {'chr9:-':[[100395423, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]],...]}
-    del readcounts
-    
-    # sort the list of lists for each chromosome & strand combination    
-    for k,v in poscounts.items(): 
-        # sort in place to save memory
-        v.sort(key = lambda val: val[0]) 
-        # get the indexes of lists containing neighboring positions
-        for indexes in find_nearby_indexes(v, max_distance):
-            #print(indexes)            
-            # extract the cluster
-            cs_cluster = v[indexes[0]:(indexes[-1]+1)]
-            # the original list in the dict will be edited in place:
-            cluster_nearby_cleavage_sites(cs_cluster, max_distance)
-        # delete positions with 0 read number after clustering
-        poscounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
-    
-    # write the result to disk in csv format   
-    print( 'Writing to file...')
-    with open(os.path.join(outfolder, outfile), 'w') as fout:
-        # write header        
-        #sample_string = ','.join([pass_file + '.num' for pass_file in pass_files])
-        sample_string = ','.join(sample_names)
-        fout.write('chromosome,strand,position,%s\n' %sample_string)
-        # write read counts for each cluster
-        for k in poscounts:
-            chromosome, strand = k.split(':')
-            for record in poscounts[k]:
-                position = str(record[0])
-                counts = ','.join([str(int(count)) for count in record[1][:total_num_column]])
-                fout.write('%s,%s,%s,%s\n'%(chromosome, strand, position, counts))
- 
 
 def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length = 5):
     '''Pick PASS reads with at least min_length mapped 5' Ts in pass_in and copy 
