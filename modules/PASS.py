@@ -183,6 +183,29 @@ class FastqFile():
                 fout.write(str(fastq_record))
 
 
+def merge_and_rename(selected_fastq_files, df, file_string, rawfastq_dir):
+    '''Unzip (if necessary), merge, and rename a list of selected fastq files. 
+    
+    Arguments:
+    selected_fastq_files: a list of selected fastq files. Must all be in either .fastq or .fastq.gz format.
+    df: a sub-dataframe of sample_description used for renaming files
+    file_string: string in the fastq file names for mapping to sample names
+    '''    
+    if len(selected_fastq_files) > 0:
+        joint_file_names = ' '.join(selected_fastq_files)
+        
+        if selected_fastq_files[0].endswith('.gz'):
+            print('\nMerging, unzipping, and renaming fastq files ....')
+            cmd = f'cat {joint_file_names} | gunzip > {str(rawfastq_dir)}/{df[df.fastq_file_unique_string == file_string]["sample"].values[0]}.fastq'
+        else:
+            print('\nMerging and renaming fastq files ....')
+            cmd = f'cat {joint_file_names} > {str(rawfastq_dir)}/{df[df.fastq_file_unique_string == file_string]["sample"].values[0]}.fastq'
+        print(cmd)
+        os.system(cmd)
+        # Remove downloaded raw fastq files immediately to save space 
+        cmd = 'rm ' + joint_file_names
+        os.system(cmd)
+
 def count_fastq(filename):
     '''A function for counting fastq record number'''
     return Path(filename).name, FastqFile(filename).get_read_num()
@@ -231,10 +254,10 @@ def get_seq(chromosome, strand, start, end, genome):
     
      
 def split_sam(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
-    '''Split a sam_file into PASS, noPASS, and spike-in sam files.
+    '''Split a sam_file into PASS, nonpass, and spike-in sam files.
 
     Loop through records in the sam file, if the record is PASS, write to
-    pass_file. Mapped non-PASS reads are saved in nopass_file. Reads mapped to 
+    pass_file. Mapped non-PASS reads are saved in nonpass_file. Reads mapped to 
     rRNA genes are skipped. Sequencing direction can only be reverse or forward. 
 
     Attach matched tail length (ML), unmatched tail length (UL), and last mapped
@@ -254,7 +277,7 @@ def split_sam(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
     Separate sam files containing either PASS reads, nonPASS reads, or spike-ins.
     '''
     pass_file = open(sam_file.replace('.sam', '.pass'), 'w')
-    nopass_file = open(sam_file.replace('.sam', '.nopass'), 'w')
+    nonpass_file = open(sam_file.replace('.sam', '.nonpass'), 'w')
     if spike_in: spike_in_file = open(sam_file.replace('.sam', '.spike_in'), 'w')
     
     lap = 0
@@ -264,7 +287,7 @@ def split_sam(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
             # Skip header
             if line[0] == '@':
                 pass_file.write(line)
-                nopass_file.write(line)
+                nonpass_file.write(line)
                 if spike_in: spike_in_file.write(line)
                 continue
             # Process each line
@@ -288,7 +311,7 @@ def split_sam(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
             t_stretch_len = int(match.groups()[0])
             # Skip records with short T-stretches
             if t_stretch_len < 2:
-                nopass_file.write(line)
+                nonpass_file.write(line)
                 continue
 
             # Get genomic sequence downstream of the LAP (last mapped position).
@@ -333,7 +356,7 @@ def split_sam(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
                         lap -= len(elements[1])
                     # If the t_stretch_len is reduced enough, no need to analyze downstream sequence
                     if t_stretch_len == 0:
-                        nopass_file.write(line.strip() + '\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
+                        nonpass_file.write(line.strip() + '\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
                                               % (0, 0, lap))
                         continue
 
@@ -349,10 +372,10 @@ def split_sam(sam_file, min_mapq = 10, direction = 'reverse', spike_in = None):
             else:
                 match = re.match('A*', downstream_seq)
                 matched_len = len(match.group())  # value: t_stretch_len-1 or t_stretch_len
-                nopass_file.write(line.strip() + '\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
+                nonpass_file.write(line.strip() + '\tML:i:%d\tUL:i:%d\tLM:i:%d\n'
                                       % (matched_len, t_stretch_len - matched_len, lap))
     pass_file.close()
-    nopass_file.close()
+    nonpass_file.close()
     if spike_in: spike_in_file.close()
     os.system('rm ' + sam_file)
 
@@ -503,7 +526,7 @@ def cluster_nearby_clusters(cs_cluster, max_distance):
     cs_cluster is like:[position, [num in pass_files]] (Ordered by position)
     [[155603441, [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]],
      [155603444, [3, 1, 3, 14, 13, 8, 6, 1, 1, 10, 1, 6]],
-     [155603445, [8, 1, 4, 13, 20, 8, 6, 0, 5, 19, 5, 19]]], with
+     [155603445, [8, 1, 4, 13, 20, 8, 6, 0, 5, 19, 5, 19]]]
 
     Output:
     """
@@ -544,16 +567,17 @@ def cluster_nearby_clusters(cs_cluster, max_distance):
             cluster_nearby_clusters(cs_cluster[right_index + 1:],
                                                max_distance)
 
-def _dict_to_clustered_dict(readcounts, max_distance):
+def cluster_dict(readcounts, max_distance):
     '''Converts a dict of readcount into a dict of clustered readcount.
     
-    This function is only meant to be called by cluster_pass_reads() and
-    cluster_cleavage_sites().
+    This function is only meant to be called by cluster_pass_reads(),
+    rescue_nonpass_reads(), cluster_cleavage_sites().
 
     Arguments:
     readcounts, a dict containing something like:
     'chr11:+:31270274': [6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     '''
+    print('Clustering reads ...')
     # Calculate the normalized read numbers and attach to the read numbers
     df = pd.DataFrame(readcounts).T
     normalized = df / df.sum(0)
@@ -631,7 +655,6 @@ def cluster_pass_reads(pass_files,
             # ('chr11:+:31270274', [6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
         fin.close()
 
-    print('Clustering reads ...')
     # # Calculate the normalized read numbers and attach to the read numbers
     # df = pd.DataFrame(readcounts).T
     # normalized = df / df.sum(0)
@@ -665,7 +688,7 @@ def cluster_pass_reads(pass_files,
     #     # Delete positions with 0 read number after clustering
     #     cpcounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
 
-    cpcounts = _dict_to_clustered_dict(readcounts, max_distance)
+    cpcounts = cluster_dict(readcounts, max_distance)
 
     # Write the result to disk in csv format
     print('Writing to output file ...')
@@ -758,7 +781,7 @@ def cluster_cleavage_sites(input_cs_files, output = 'meta.cluster.csv',
     #     # Delete positions with 0 read number after clustering
     #     cpcounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
     
-    cpcounts = _dict_to_clustered_dict(readcounts, max_distance)
+    cpcounts = cluster_dict(readcounts, max_distance)
     
     # Write the result to disk in csv format   
     print( 'Writing to file...')
@@ -814,6 +837,7 @@ def make_url(project, experiment, sam_dir, sam_files, samtools, genome_size,
     '''Creates a file containing UCSC track records''' 
     # Create bigWig files
     l = len(sam_files)
+    read_type = 'nonPASS' if re.search('nonpass', sam_files[0]) else 'PASS' 
     with mp.Pool(processes = processes) as pool:
         pool.starmap(sam2bigwig, zip(sam_files, 
                                      [samtools]*l, 
@@ -840,7 +864,7 @@ def make_url(project, experiment, sam_dir, sam_files, samtools, genome_size,
             track = (f'track type=bigWig visibility=2 alwaysZero=on color={color} '
                      f'graphType=bar maxHeightPixels=30:30:30 itemRgb=On group='
                      f'{project} name="{sample}{strand}" '
-                     f'description="{sample}{strand}" '
+                     f'description="{sample}{strand} {read_type}" '
                      f'bigDataUrl=http://intron.njms.rutgers.edu/zhengdh/bigwig/'
                      f'{project}/{experiment}/{sample}.{strand2str[strand]}.bw\n'
                     )
