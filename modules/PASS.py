@@ -183,23 +183,22 @@ class FastqFile():
                 fout.write(str(fastq_record))
 
 
-def merge_and_rename(selected_fastq_files, df, file_string, rawfastq_dir):
+def merge_and_rename(selected_fastq_files, output_file, rawfastq_dir):
     '''Unzip (if necessary), merge, and rename a list of selected fastq files. 
     
     Arguments:
     selected_fastq_files: a list of selected fastq files. Must all be in either .fastq or .fastq.gz format.
-    df: a sub-dataframe of sample_description used for renaming files
-    file_string: string in the fastq file names for mapping to sample names
+    output_file: output fastq file name.
     '''    
     if len(selected_fastq_files) > 0:
         joint_file_names = ' '.join(selected_fastq_files)
         
         if selected_fastq_files[0].endswith('.gz'):
             print('\nMerging, unzipping, and renaming fastq files ....')
-            cmd = f'cat {joint_file_names} | gunzip > {str(rawfastq_dir)}/{df[df.fastq_file_unique_string == file_string]["sample"].values[0]}.fastq'
+            cmd = f'cat {joint_file_names} | gunzip > {str(rawfastq_dir)}/{output_file}'
         else:
             print('\nMerging and renaming fastq files ....')
-            cmd = f'cat {joint_file_names} > {str(rawfastq_dir)}/{df[df.fastq_file_unique_string == file_string]["sample"].values[0]}.fastq'
+            cmd = f'cat {joint_file_names} > {str(rawfastq_dir)}/{output_file}'
         print(cmd)
         os.system(cmd)
         # Remove downloaded raw fastq files immediately to save space 
@@ -428,7 +427,7 @@ def count_sam(sam_file):
     line_num = 0
     for line in open(sam_file): 
         if not line[0] == '@': line_num += 1
-    return line_num 
+    return Path(sam_file).name, line_num 
 
 
 def count_5T_stretch(sam_file, max_TS = 25):
