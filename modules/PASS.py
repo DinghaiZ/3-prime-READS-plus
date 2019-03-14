@@ -180,7 +180,8 @@ class FastqFile():
             for fastq_record in self.get_fastq_record():
                 fastq_record.trim_5p_Ts(self.randNT5)
                 if fastq_record.trimmed5T: self.trimmed5T_num += 1
-                fout.write(str(fastq_record))
+                if len(fastq_record) >= 18:
+                    fout.write(str(fastq_record))
 
 
 def merge_and_rename(selected_fastq_files, output_file, rawfastq_dir):
@@ -798,7 +799,7 @@ def cluster_cleavage_sites(input_cs_files, output = 'meta.cluster.csv',
 
 
 def sam2bigwig(sam_file, samtools, genomeCoverageBed, 
-               genome_size, bedGraphToBigWig):
+               genome_size, bedGraphToBigWig, keep_bam = False):
     '''sam -> bam -> bigwig'''
     # The sam2bigwid function cannot be defined within make_url, because
     # functions are only picklable if they are defined at the top-level of 
@@ -808,7 +809,7 @@ def sam2bigwig(sam_file, samtools, genomeCoverageBed,
     cmd = f'{samtools} view -uS {sam_file} | {samtools} sort - {prefix}'
     os.system(cmd)
     # bam -> bedGraph
-    totalReadNum = count_sam(sam_file)
+    totalReadNum = count_sam(sam_file)[1]
     cmd = (f'{genomeCoverageBed} -bg -split -ibam {prefix}.bam -strand + -g '
            f'{genome_size} -scale {str(-10**6/totalReadNum)} > '
            f'{prefix}.m.bedgraph'
@@ -825,24 +826,33 @@ def sam2bigwig(sam_file, samtools, genomeCoverageBed,
     cmd = f'{bedGraphToBigWig} {prefix}.m.bedgraph {genome_size} {prefix}.m.bw'
     os.system(cmd)
     # Remove intermediate files
-    cmd = f'rm {prefix}*.bam'
-    os.system(cmd)
     cmd = f'rm {prefix}*bedgraph*'
     os.system(cmd)
+    if not keep_bam:
+        cmd = f'rm {prefix}*.bam'
+        os.system(cmd)
 
 
 def make_url(project, experiment, sam_dir, sam_files, samtools, genome_size, 
-             genomeCoverageBed, bedGraphToBigWig, sample_description, processes):
+             genomeCoverageBed, bedGraphToBigWig, keep_bam, sample_description, 
+             processes):
     '''Creates a file containing UCSC track records''' 
     # Create bigWig files
     l = len(sam_files)
-    read_type = 'nonPASS' if re.search('nonpass', sam_files[0]) else 'PASS' 
+    if re.search('.nonpass.', sam_files[0]):
+        read_type = 'nonPASS' 
+    elif re.search('.pass.', sam_files[0]):
+        read_type = 'PASS' 
+    else:
+        read_type = ''
+    # read_type = 'nonPASS' if re.search('nonpass', sam_files[0]) else 'PASS' 
     with mp.Pool(processes = processes) as pool:
         pool.starmap(sam2bigwig, zip(sam_files, 
                                      [samtools]*l, 
                                      [genomeCoverageBed]*l, 
                                      [genome_size]*l, 
-                                     [bedGraphToBigWig]*l))
+                                     [bedGraphToBigWig]*l,
+                                     [keep_bam]*l))
     bw_files = sorted([str(bw_file) for bw_file in sam_dir.glob('*.bw')])
     bw_samples = sorted(list(set([filename.split('.')[0].split('/')[-1] 
                                   for filename in bw_files])))
