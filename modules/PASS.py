@@ -193,10 +193,10 @@ def merge_and_rename(selected_fastq_files, output_file, rawfastq_dir):
     '''    
     if len(selected_fastq_files) > 0:
         joint_file_names = ' '.join(selected_fastq_files)
-        
         if selected_fastq_files[0].endswith('.gz'):
             print('\nMerging, unzipping, and renaming fastq files ....')
-            cmd = f'cat {joint_file_names} | gunzip > {str(rawfastq_dir)}/{output_file}'
+            # cmd = f'cat {joint_file_names} | gunzip > {str(rawfastq_dir)}/{output_file}'
+            cmd = f'zcat {joint_file_names} > {str(rawfastq_dir)}/{output_file}'
         else:
             print('\nMerging and renaming fastq files ....')
             cmd = f'cat {joint_file_names} > {str(rawfastq_dir)}/{output_file}'
@@ -428,7 +428,15 @@ def count_sam(sam_file):
     line_num = 0
     for line in open(sam_file): 
         if not line[0] == '@': line_num += 1
-    return Path(sam_file).name, line_num 
+    sample_name = Path(sam_file).name.replace('.Aligned.out.pass.sam', '')
+    return sample_name, line_num 
+
+
+def count_bam(bam_file):
+    cmd = f'samtools view -c {bam_file}'
+    count = int(check_output(cmd, shell=True).decode().strip())
+    sample_name = Path(bam_file).name.split('.')[0]
+    return sample_name, count
 
 
 def count_5T_stretch(sam_file, max_TS = 25):
@@ -867,7 +875,7 @@ def make_url(project, experiment, sam_dir, sam_files, samtools, genome_size,
     f = open(sam_dir/'bigwigCaller.txt', 'w')
     for strand in ['+', '-']:
         for sample in bw_samples:
-            color = colors[sample_description[sample_description['sample'] == 
+            color = colors[sample_description[sample_description['sample'] == \
                                     sample].genome_browser_track_color - 1, ][0]
             color = ','.join([str(int(c)) for c in color])
             track = (f'track type=bigWig visibility=2 alwaysZero=on color={color} '
