@@ -195,7 +195,6 @@ def merge_and_rename(selected_fastq_files, output_file, rawfastq_dir):
         joint_file_names = ' '.join(selected_fastq_files)
         if selected_fastq_files[0].endswith('.gz'):
             print('\nMerging, unzipping, and renaming fastq files ....')
-            # cmd = f'cat {joint_file_names} | gunzip > {str(rawfastq_dir)}/{output_file}'
             cmd = f'zcat {joint_file_names} > {str(rawfastq_dir)}/{output_file}'
         else:
             print('\nMerging and renaming fastq files ....')
@@ -524,7 +523,7 @@ def find_nearby_indexes(v, max_distance):
             index_list = []
 
 
-def cluster_nearby_clusters(cs_cluster, max_distance):
+def merge_nearby_clusters(cs_cluster, max_distance):
     """
     Recursively merge neighboring clusters using a devide and conqurer algorithm
     Neighboring positions located within max_distance from the peak cluster with 
@@ -569,10 +568,10 @@ def cluster_nearby_clusters(cs_cluster, max_distance):
                 right_index = max(right_index, j)
         # Devide and conqure
         if left_index > 0:
-            cluster_nearby_clusters(cs_cluster[:left_index],
+            merge_nearby_clusters(cs_cluster[:left_index],
                                                max_distance)
         if right_index < len(cs_cluster) - 1:
-            cluster_nearby_clusters(cs_cluster[right_index + 1:],
+            merge_nearby_clusters(cs_cluster[right_index + 1:],
                                                max_distance)
 
 def cluster_dict(readcounts, max_distance):
@@ -608,7 +607,7 @@ def cluster_dict(readcounts, max_distance):
         for indexes in find_nearby_indexes(v, max_distance):
             cs_cluster = v[indexes[0]:(indexes[-1] + 1)]
             # The original list in the dict will be edited in place:
-            cluster_nearby_clusters(cs_cluster, max_distance)
+            merge_nearby_clusters(cs_cluster, max_distance)
         # Delete positions with 0 read number after clustering
         cpcounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
     return cpcounts
@@ -663,39 +662,7 @@ def cluster_pass_reads(pass_files,
             # ('chr11:+:31270274', [6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
         fin.close()
 
-    # # Calculate the normalized read numbers and attach to the read numbers
-    # df = pd.DataFrame(readcounts).T
-    # normalized = df / df.sum(0)
-    # df = pd.concat([df, normalized], axis = 1, ignore_index = True)
-    # readcounts = df.T.to_dict('list')
-    # # readcount.popitem() may return something like:
-    # #  ('chr11:+:31270274', [6.0, 7.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-    # #  0.0, 0.0, 9.1427902698768829e-07,3.0861678694165542e-06, 0.0, 0.0 ...]),
-    # # with the first 12 values being read counts and the next 12 values being 
-    # # normalized read counts
-
-    # # Separate positions based on chrmosome & strand combination
-    # cpcounts = collections.defaultdict(list)
-    # while len(readcounts) > 0:
-    #     k, v = readcounts.popitem()  
-    #     k = k.split(':')
-    #     cpcounts[':'.join(k[:2])].append([int(k[2]), v]) 
-    #     # cpcounts.popitem() is like
-    #     # {'chr9:-':[[100395423, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]],...]}
-    # del readcounts
-
-    # # Sort the list of lists for each chromosome & strand combination
-    # for k, v in cpcounts.items():
-    #     # Sort in place to save memory
-    #     v.sort(key=lambda val: val[0])
-    #     # Get the indexes of lists containing neighboring positions
-    #     for indexes in find_nearby_indexes(v, max_distance):
-    #         cs_cluster = v[indexes[0]:(indexes[-1] + 1)]
-    #         # The original list in the dict will be edited in place:
-    #         cluster_nearby_clusters(cs_cluster, max_distance)
-    #     # Delete positions with 0 read number after clustering
-    #     cpcounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
-
+    # Converts a dict of readcount into a dict of clustered readcount.
     cpcounts = cluster_dict(readcounts, max_distance)
 
     # Write the result to disk in csv format
@@ -758,37 +725,8 @@ def cluster_cleavage_sites(input_cs_files, output = 'meta.cluster.csv',
         fin.close()
     # readcounts example: 
     # {'chr9:-:100395423':[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]}
-    
-    # # Calculate normalized read numbers and attach to the read numbers  
-    # print('Calculating RPMs...')
-    # df = pd.DataFrame(readcounts).T    
-    # normalized = df/df.sum(0)
-    # df = pd.concat([df, normalized], axis = 1, ignore_index = True)
-    # readcounts = df.T.to_dict('list')    
-    
-    # print( 'Clustering cleavage sites...')
-    # # Group positions and read numbers using chrmosome & strand combination
-    # cpcounts = collections.defaultdict(list)
-    # while len(readcounts) > 0:
-    #     k,v = readcounts.popitem() 
-    #     k = k.split(':')
-    #     cpcounts[':'.join(k[:2])].append([int(k[2]),v]) 
-    #     # cpcounts.popitem() returns something like:        
-    #     # {'chr9:-':[[100395423, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56]],...]}
-    # del readcounts
-    
-    # # Sort the list of lists for each chromosome & strand combination    
-    # for k,v in cpcounts.items(): 
-    #     v.sort(key = lambda val: val[0]) 
-    #     # Get the indexes of lists containing neighboring positions
-    #     for indexes in find_nearby_indexes(v, max_distance):
-    #         # Extract the cluster
-    #         cs_cluster = v[indexes[0]:(indexes[-1]+1)]
-    #         # The original list in the dict will be edited in place:
-    #         cluster_nearby_clusters(cs_cluster, max_distance)
-    #     # Delete positions with 0 read number after clustering
-    #     cpcounts[k] = [posi_num for posi_num in v if not posi_num[1] == 0]
-    
+   
+    # Converts a dict of readcount into a dict of clustered readcount.
     cpcounts = cluster_dict(readcounts, max_distance)
     
     # Write the result to disk in csv format   
@@ -806,32 +744,31 @@ def cluster_cleavage_sites(input_cs_files, output = 'meta.cluster.csv',
                 fout.write('%s,%s,%s,%s\n'%(chromosome, strand, position, counts))
 
 
-def sam2bigwig(sam_file, samtools, genomeCoverageBed, 
-               genome_size, bedGraphToBigWig, keep_bam = False):
+def sam2bigwig(sam_file, genome_size, keep_bam = False):
     '''sam -> bam -> bigwig'''
     # The sam2bigwid function cannot be defined within make_url, because
     # functions are only picklable if they are defined at the top-level of 
     # a module.
     prefix = sam_file.split('.')[0]
     # sam -> bam
-    cmd = f'{samtools} view -uS {sam_file} | {samtools} sort - {prefix}'
+    cmd = f'samtools view -uS {sam_file} | samtools sort - {prefix}'
     os.system(cmd)
     # bam -> bedGraph
     totalReadNum = count_sam(sam_file)[1]
-    cmd = (f'{genomeCoverageBed} -bg -split -ibam {prefix}.bam -strand + -g '
+    cmd = (f'genomeCoverageBed -bg -split -ibam {prefix}.bam -strand + -g '
            f'{genome_size} -scale {str(-10**6/totalReadNum)} > '
            f'{prefix}.m.bedgraph'
           )
     os.system(cmd)
-    cmd = (f'{genomeCoverageBed} -bg -split -ibam {prefix}.bam -strand - -g '
+    cmd = (f'genomeCoverageBed -bg -split -ibam {prefix}.bam -strand - -g '
            f'{genome_size} -scale {str(10**6/totalReadNum)} > '
            f'{prefix}.p.bedgraph'
           )
     os.system(cmd)
     # bedgraph -> bigWig
-    cmd = f'{bedGraphToBigWig} {prefix}.p.bedgraph {genome_size} {prefix}.p.bw'
+    cmd = f'bedGraphToBigWig {prefix}.p.bedgraph {genome_size} {prefix}.p.bw'
     os.system(cmd)
-    cmd = f'{bedGraphToBigWig} {prefix}.m.bedgraph {genome_size} {prefix}.m.bw'
+    cmd = f'bedGraphToBigWig {prefix}.m.bedgraph {genome_size} {prefix}.m.bw'
     os.system(cmd)
     # Remove intermediate files
     cmd = f'rm {prefix}*bedgraph*'
@@ -841,25 +778,21 @@ def sam2bigwig(sam_file, samtools, genomeCoverageBed,
         os.system(cmd)
 
 
-def make_url(project, experiment, sam_dir, sam_files, samtools, genome_size, 
-             genomeCoverageBed, bedGraphToBigWig, keep_bam, sample_description, 
-             processes):
+def make_url(project, experiment, sam_dir, sam_files, genome_size, 
+             keep_bam, sample_description, processes, bigDataUrl):
     '''Creates a file containing UCSC track records''' 
     # Create bigWig files
     l = len(sam_files)
-    if re.search('.nonpass.', sam_files[0]):
+    if re.search('\.nonpass$', sam_files[0]):
         read_type = 'nonPASS' 
-    elif re.search('.pass.', sam_files[0]):
+    elif re.search('\.pass$', sam_files[0]):
         read_type = 'PASS' 
     else:
-        read_type = ''
-    # read_type = 'nonPASS' if re.search('nonpass', sam_files[0]) else 'PASS' 
+        read_type = 'other'
+    # Convert sam files into bigwig files 
     with mp.Pool(processes = processes) as pool:
         pool.starmap(sam2bigwig, zip(sam_files, 
-                                     [samtools]*l, 
-                                     [genomeCoverageBed]*l, 
                                      [genome_size]*l, 
-                                     [bedGraphToBigWig]*l,
                                      [keep_bam]*l))
     bw_files = sorted([str(bw_file) for bw_file in sam_dir.glob('*.bw')])
     bw_samples = sorted(list(set([filename.split('.')[0].split('/')[-1] 
@@ -880,10 +813,10 @@ def make_url(project, experiment, sam_dir, sam_files, samtools, genome_size,
             color = ','.join([str(int(c)) for c in color])
             track = (f'track type=bigWig visibility=2 alwaysZero=on color={color} '
                      f'graphType=bar maxHeightPixels=30:30:30 itemRgb=On group='
-                     f'{project} name="{sample}{strand}" '
+                     f'{project} name="{sample}{strand} {read_type}" '
                      f'description="{sample}{strand} {read_type}" '
-                     f'bigDataUrl=http://intron.njms.rutgers.edu/zhengdh/bigwig/'
-                     f'{project}/{experiment}/{sample}.{strand2str[strand]}.bw\n'
+                     f'bigDataUrl={bigDataUrl}{project}/{experiment}/'
+                     f'{read_type}/{sample}.{strand2str[strand]}.bw\n'
                     )
             f.write(track)
     f.close()
