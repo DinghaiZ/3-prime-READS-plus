@@ -19,7 +19,7 @@ To solve the above issues, the [step 1](https://github.com/DinghaiZ/3-prime-READ
 
 
 ## Quick Start
-Step 1. Run the [note book](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/3%60READS%2B%20Step-1.ipynb) to generate read count matrix, do QC, and visualize PASS and nonPASS reads in UCSC genome browser. 
+Step 1. Run the [note book](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/3%60READS%2B%20Step-1.ipynb) to do read QC, generate PASS read count matrix,  and visualize PASS and nonPASS reads in UCSC genome browser. 
 
 Step 2. pA site annotation (Coming soon)
 
