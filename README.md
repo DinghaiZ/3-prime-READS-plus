@@ -10,7 +10,7 @@
 Steming from partial digestion of the poly(A) tail and absent from the genome, these T-streches can be used to identify cleavage and polyadenylation sites in the genome:
 
 <p align="center">
-  <img src="images/read.jpg" width="400" height="250" class="center">
+  <img src="images/read.jpg" width="350" height="210" class="center">
 </p>
 
 However, long T-streches can also mislead alignment of the reads to the genome. Moreover, due to micro-heterogeneity, the mapped reads that are close to each other in the genome need to be clustered into cleavage and polyadenylation (pA) sites.
