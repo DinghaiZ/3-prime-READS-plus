@@ -1,9 +1,11 @@
 # 3-prime-READS-plus
 ## Pipeline for analyzing 3' end RNA-seq (3'READS+) data 
 
-[3'READS+](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5029459/) is a 3' end RNA-seq protocol that produces sequencing reads with variable number of T-streches in the 5' end of the reads:![3'READS+ Flow Chart](images/flowchart.jpg) 
+[3'READS+](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5029459/) is a 3' end RNA-seq protocol that produces sequencing reads with variable number of T-streches in the 5' end of the reads:
+<img src="images/flowchart.jpg" width="800" height="800">
 
-Steming from partial digestion of the poly(A) tail and absent from the genome, these T-streches can be used to identify cleavage and polyadenylation sites in the genome:![3'READS+ Read Structure](images/read.jpg) 
+Steming from partial digestion of the poly(A) tail and absent from the genome, these T-streches can be used to identify cleavage and polyadenylation sites in the genome:
+<img src="images/read.jpg" width="500" height="300">
 
 However, long T-streches can also mislead alignment of the reads to the genome. Moreover, due to micro-heterogeneity, the mapped reads that are close to each other in the genome need to be clustered into cleavage and polyadenylation (pA) sites.
 
