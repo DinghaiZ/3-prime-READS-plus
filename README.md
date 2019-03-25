@@ -3,11 +3,11 @@
 
 [3'READS+](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5029459/) is a 3' end RNA-seq protocol that produces sequencing reads with variable number of T-streches in the 5' end of the reads:
 
-<img src="images/flowchart.jpg" width="800" height="800">
+<img src="images/flowchart.jpg" width="400" height="400" align="middle">
 
 Steming from partial digestion of the poly(A) tail and absent from the genome, these T-streches can be used to identify cleavage and polyadenylation sites in the genome:
 
-<img src="images/read.jpg" width="500" height="300">
+<img src="images/read.jpg" width="400" height="250" align="middle">
 
 However, long T-streches can also mislead alignment of the reads to the genome. Moreover, due to micro-heterogeneity, the mapped reads that are close to each other in the genome need to be clustered into cleavage and polyadenylation (pA) sites.
 
