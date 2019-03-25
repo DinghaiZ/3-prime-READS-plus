@@ -1,13 +1,13 @@
 # 3-prime-READS-plus
 ## Pipeline for analyzing 3' end RNA-seq (3'READS+) data 
 
-[3'READS+](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5029459/) is a 3' end RNA-seq protocol that produces sequencing reads with variable number of T-streches in the 5' end of the reads:
+About 70% of mRNA genes in eukaryotes contain multiple cleavage and polyadenylation sites (PAS), resulting in alternative cleavage and polyadenylation (APA) isoforms with different coding sequences and/or variable 3′ untranslated regions (3′UTRs). [3'READS+](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5029459/) is a 3' end RNA-seq protocol for accurate identification of PAS in the genome, even in A-rich regions:
 
 <p align="center">
   <img src="images/flowchart.jpg" width="500" height="500">
 </p>
 
-Steming from partial digestion of the poly(A) tail and absent from the genome, these T-streches can be used to identify cleavage and polyadenylation sites in the genome:
+Steming from incomplete digestion of the poly(A) tail and absent from the genome, these T-streches can be used to identify cleavage and polyadenylation sites in the genome:
 
 <p align="center">
   <img src="images/read.jpg" width="350" height="210" class="center">
@@ -19,9 +19,9 @@ To solve the above issues, the [step 1](https://github.com/DinghaiZ/3-prime-READ
 
 
 ## Quick Start
-Step 1. Run the [note book](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/3%60READS%2B%20Step-1.ipynb) to do read QC, generate PASS read count matrix,  and visualize PASS and nonPASS reads in UCSC genome browser. 
+Step 1. Clone this repo and run the [note book](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/3%60READS%2B%20Step-1.ipynb) to do read QC, generate PASS read count matrix,  and visualize PASS and nonPASS reads in UCSC genome browser. 
 
 Step 2. pA site annotation (Coming soon)
 
-Step 3. APA and DE analysis (Coming soon)
+Step 3. APA (alternative polyadenylation) and DE (differential gene expression) analysis (Coming soon)
 
