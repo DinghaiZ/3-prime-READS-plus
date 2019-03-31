@@ -544,7 +544,7 @@ def merge_nearby_clusters(cs_cluster, max_distance):
         if cs_cluster[i + 1][0] - cs_cluster[i][0] <= max_distance:
             clustered = False
 
-    if clustered == True:
+    if clustered:
         return True
     # When the clustering is not completed:
     else:
