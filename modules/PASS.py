@@ -783,6 +783,7 @@ def make_url(project, experiment, sam_dir, sam_files, genome_size,
     '''Creates a file containing UCSC track records''' 
     # Create bigWig files
     l = len(sam_files)
+    sample_description = sample_description.reset_index()
     if re.search('\.nonpass$', sam_files[0]):
         read_type = 'nonPASS' 
     elif re.search('\.pass$', sam_files[0]):
