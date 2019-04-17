@@ -19,7 +19,8 @@ To solve the above issues, the [step 1](https://github.com/DinghaiZ/3-prime-READ
 
 
 ## Quick Start
-Step 1. Clone this repo and run the [note book](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/Step-1.ipynb) to do read QC, generate PASS read count matrix,  and visualize PASS and nonPASS reads in UCSC genome browser. 
+
+Step 1. Clone this repo and run the [note book](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/Step-1.ipynb) to do read QC, generate PASS read count matrix,  and visualize PASS and nonPASS reads in UCSC genome browser. For every new experiment, you need to manually create the project/scripts/experiment folder and paste a copy of Phase-1.ipnb and sample_description.csv there. Then you can edit the two files to begin analysis specific for the experiment.
 
 Step 2. pA site annotation (Coming soon)
 
