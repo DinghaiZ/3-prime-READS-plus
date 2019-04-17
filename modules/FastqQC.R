@@ -12,7 +12,7 @@
 ##              (E) Number of reads where all Phred scores are above a minimum cutoff
 ##              (F) Distribution of mean quality of reads
 ##              (G) Read length distribution
-##	          	(H) Read occurrence distribution
+##	        (H) Read occurrence distribution
 
 
 ## Function for Step 1 (Compute quality stats and store them in list)
