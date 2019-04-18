@@ -749,7 +749,8 @@ def sam2bigwig(sam_file, genome_size, keep_bam = False):
     # The sam2bigwid function cannot be defined within make_url, because
     # functions are only picklable if they are defined at the top-level of 
     # a module.
-    prefix = sam_file.split('.')[0]
+    p = Path(sam_file)
+    prefix = str(p.parent/p.stem.split('.')[0])
     # sam -> bam
     cmd = f'samtools view -uS {sam_file} | samtools sort - {prefix}'
     os.system(cmd)
@@ -796,7 +797,7 @@ def make_url(project, experiment, sam_dir, sam_files, genome_size,
                                      [genome_size]*l, 
                                      [keep_bam]*l))
     bw_files = sorted([str(bw_file) for bw_file in sam_dir.glob('*.bw')])
-    bw_samples = sorted(list(set([filename.split('.')[0].split('/')[-1] 
+    bw_samples = sorted(list(set([Path(filename).stem.split('.')[0].split('/')[-1] 
                                   for filename in bw_files])))
     # Calculate colors
     if 'genome_browser_track_color' in sample_description.columns:
@@ -809,7 +810,7 @@ def make_url(project, experiment, sam_dir, sam_files, genome_size,
     f = open(sam_dir/'bigwigCaller.txt', 'w')
     for strand in ['+', '-']:
         for sample in bw_samples:
-            color = colors[sample_description[sample].genome_browser_track_color - 1, ][0]
+            color = colors[sample_description.loc[sample].genome_browser_track_color - 1, ]
             color = ','.join([str(int(c)) for c in color])
             track = (f'track type=bigWig visibility=2 alwaysZero=on color={color} '
                      f'graphType=bar maxHeightPixels=30:30:30 itemRgb=On group='
