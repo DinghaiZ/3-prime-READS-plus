@@ -783,7 +783,7 @@ def make_url(project, experiment, sam_dir, sam_files, genome_size,
     '''Creates a file containing UCSC track records''' 
     # Create bigWig files
     l = len(sam_files)
-    sample_description = sample_description.reset_index()
+    # sample_description = sample_description.reset_index()
     if re.search('\.nonpass$', sam_files[0]):
         read_type = 'nonPASS' 
     elif re.search('\.pass$', sam_files[0]):
@@ -809,8 +809,7 @@ def make_url(project, experiment, sam_dir, sam_files, genome_size,
     f = open(sam_dir/'bigwigCaller.txt', 'w')
     for strand in ['+', '-']:
         for sample in bw_samples:
-            color = colors[sample_description[sample_description['sample'] == \
-                                    sample].genome_browser_track_color - 1, ][0]
+            color = colors[sample_description[sample].genome_browser_track_color - 1, ][0]
             color = ','.join([str(int(c)) for c in color])
             track = (f'track type=bigWig visibility=2 alwaysZero=on color={color} '
                      f'graphType=bar maxHeightPixels=30:30:30 itemRgb=On group='
