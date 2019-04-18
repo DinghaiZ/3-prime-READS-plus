@@ -669,7 +669,7 @@ def cluster_pass_reads(pass_files,
     print('Writing to output file ...')
     with open(output, 'w') as fout:
         # Write header
-        sample_string = ','.join([pass_file.split('.')[0].split('/')[-1]
+        sample_string = ','.join([Path(pass_file).stem.split('.')[0].split('/')[-1]
                                   for pass_file in pass_files])
         fout.write(f'chromosome,strand,position,{sample_string}\n')
         # Write read counts for each cluster
