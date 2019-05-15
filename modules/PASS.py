@@ -766,6 +766,11 @@ def sam2bigwig(sam_file, genome_size, keep_bam = False):
            f'{prefix}.p.bedgraph'
           )
     os.system(cmd)
+    # Format the last column of the bedgraph files
+    for file_name in (f'{prefix}.m.bedgraph', f'{prefix}.p.bedgraph'):
+        bg = pd.read_csv(file_name, header = None, sep = "\t")
+        bg.iloc[:,3] = bg.iloc[:,3].round(1)
+        bg.to_csv(file_name, header = False, sep = "\t", index = False)
     # bedgraph -> bigWig
     cmd = f'bedGraphToBigWig {prefix}.p.bedgraph {genome_size} {prefix}.p.bw'
     os.system(cmd)
@@ -773,7 +778,7 @@ def sam2bigwig(sam_file, genome_size, keep_bam = False):
     os.system(cmd)
     # Remove intermediate files
     cmd = f'rm {prefix}*bedgraph*'
-    os.system(cmd)
+    # os.system(cmd)
     if not keep_bam:
         cmd = f'rm {prefix}*.bam'
         os.system(cmd)
