@@ -18,7 +18,7 @@ import multiprocessing as mp
 
 
 class FastqRecord():
-    '''Fastq record with a method to trim 5' T-stretches'''
+    '''Fastq record'''
     def __init__(self, name, seq, qual):
         self.name = name
         self.seq = seq
@@ -95,7 +95,7 @@ class FastqRecord():
                                          ])
 
     def trim_3p_Ns(self, randNT3):
-        '''Trim randNT3 NT from 3' end if necessary.
+        '''Trim randNT3 NT from 3' end.
 
 		Example:		
 
@@ -174,8 +174,7 @@ class FastqFile():
                 self.read_num += 1
 
     def create_trimmed_fastq_file(self):
-        '''Trims 5' Ts of fastq records and write to a new file
-        '''
+        '''Trims 5' Ts of fastq records and write to a new file'''
         with open(self.newname, 'w') as fout:
             for fastq_record in self.get_fastq_record():
                 fastq_record.trim_5p_Ts(self.randNT5)
