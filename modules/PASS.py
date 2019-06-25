@@ -682,7 +682,7 @@ def cluster_pass_reads(pass_files,
     print('Done!')
 
 
-def cluster_cleavage_sites(input_cs_files, output = 'meta.cluster.csv', 
+def cluster_cleavage_sites(input_cs_files, output = 'combined.clusters.csv', 
                            max_distance = 24):
     '''Cluster cleavage sites from different cleavage site files (cs_files). 
     
