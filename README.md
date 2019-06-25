@@ -20,9 +20,9 @@ To solve the above issues, [phase 1](https://github.com/DinghaiZ/3-prime-READS-p
 
 ## Quick Start
 
-**[Phase 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/scripts/experiment_1/Phase-1.ipynb) Read QC, generate PASS read count matrix,  and visualize PASS and nonPASS reads in UCSC genome browser.** For every new experiment, you need to create the _project_name/scripts/experiment_name_ folder and paste a copy of Phase-1.ipnb and sample_description.csv there. Then you can edit the two files to begin analysis specific for the experiment.
+**[Phase 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/scripts/experiment_1/Phase-1.ipynb). Read QC, generate PASS read count matrix,  and visualize PASS and nonPASS reads in UCSC genome browser.** For every new experiment, you need to create the _project_name/scripts/experiment_name_ folder and paste a copy of Phase-1.ipnb and sample_description.csv there. Then you can edit the two files to begin analysis specific for the experiment.
 
-**Phase 2**. pA site annotation (Coming soon)
+**[Phase 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/scripts/experiment_1/Phase-2.ipynb). pA site annotation (Coming soon)**
 
 **Phase 3**. APA (alternative polyadenylation) and DE (differential gene expression) analysis (Coming soon)
 
