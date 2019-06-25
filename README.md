@@ -28,5 +28,4 @@ To solve the above issues, [phase 1](https://github.com/DinghaiZ/3-prime-READS-p
 
 **[Phase 4](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/scripts/experiment_1/Phase-4.ipynb). Automatic qPCR primer design for validation of APA (Coming soon)**  
 
-**[Phase 5](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/scripts/experiment_1/Phase-5.ipynb). Building machine learning or deep learning models (Coming soon) **
-
+**[Phase 5](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/scripts/experiment_1/Phase-5.ipynb). Building machine learning or deep learning models (Coming soon)**
