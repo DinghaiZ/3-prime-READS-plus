@@ -24,9 +24,9 @@ To solve the above issues, [phase 1](https://github.com/DinghaiZ/3-prime-READS-p
 
 **[Phase 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/scripts/experiment_1/Phase-2.ipynb). pA site annotation (Coming soon)**
 
-**Phase 3**. APA (alternative polyadenylation) and DE (differential gene expression) analysis (Coming soon)
+**[Phase 3](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/scripts/experiment_1/Phase-3.ipynb). APA (alternative polyadenylation) and DE (differential gene expression) analysis (Coming soon)**
 
-**Phase 4**. Automatic qPCR primer design for validation of APA (Coming soon)  
+**[Phase 4](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/scripts/experiment_1/Phase-4.ipynb). Automatic qPCR primer design for validation of APA (Coming soon)**  
 
-**Phase 5**. Building machine learning or deep learning models (Coming soon)
+**[Phase 5](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/scripts/experiment_1/Phase-5.ipynb). Building machine learning or deep learning models (Coming soon) **
 
