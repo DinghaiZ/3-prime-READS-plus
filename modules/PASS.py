@@ -751,7 +751,7 @@ def sam2bigwig(sam_file, genome_size, keep_bam = False):
     p = Path(sam_file)
     prefix = str(p.parent/p.stem.split('.')[0])
     # sam -> bam
-    cmd = f'samtools view -uS {sam_file} | samtools sort - {prefix}'
+    cmd = f'samtools view -uS {sam_file} | samtools sort -o {prefix}.bam'
     os.system(cmd)
     # bam -> bedGraph
     totalReadNum = count_sam(sam_file)[1]
@@ -760,10 +760,16 @@ def sam2bigwig(sam_file, genome_size, keep_bam = False):
            f'{prefix}.m.bedgraph'
           )
     os.system(cmd)
+    # On some systems (with bad LC_COLLATE setting), sorting is required
+    cmd = f'bedSort {prefix}.m.bedgraph {prefix}.m.bedgraph'
+    os.system(cmd)
     cmd = (f'genomeCoverageBed -bg -split -ibam {prefix}.bam -strand - -g '
            f'{genome_size} -scale {str(10**6/totalReadNum)} > '
            f'{prefix}.p.bedgraph'
           )
+    os.system(cmd)
+    # On some systems (with bad LC_COLLATE setting), sorting is required
+    cmd = f'bedSort {prefix}.p.bedgraph {prefix}.p.bedgraph'
     os.system(cmd)
     # Format the last column of the bedgraph files
     for file_name in (f'{prefix}.m.bedgraph', f'{prefix}.p.bedgraph'):
