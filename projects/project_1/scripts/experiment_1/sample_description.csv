@@ -1,4 +1,4 @@
-warehouse_folder_string,fastq_file_string,sample,genome_browser_track_color,read_type
+folder_string,file_string,sample,track_color,read_type
 160411,ACTGAT,C2C12P_1,1,single
 160411,ATTCCT,C2C12D_1,2,single
 160411,CAGGCG,C2C12P_2,1,single
