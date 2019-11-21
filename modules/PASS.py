@@ -197,7 +197,7 @@ def merge_and_rename(selected_fastq_files, output_file, rawfastq_dir):
             cmd = f'zcat {joint_file_names} > {str(rawfastq_dir)}/{output_file}'
         else:
             print('\nMerging and renaming fastq files ....')
-            cmd = f'cat {joint_file_names} > {str(rawfastq_dir)}/{output_file}'
+            cmd = f'cat {joint_file_names} >> {str(rawfastq_dir)}/{output_file}'
         print(cmd)
         os.system(cmd)
         # Remove downloaded raw fastq files immediately to save space 
@@ -810,8 +810,8 @@ def make_url(project, experiment, sam_dir, sam_files, genome_size,
     bw_samples = sorted(list(set([Path(filename).stem.split('.')[0].split('/')[-1] 
                                   for filename in bw_files])))
     # Calculate colors
-    if 'genome_browser_track_color' in sample_description.columns:
-        color_max = sample_description.genome_browser_track_color.max(axis=0)
+    if 'track_color' in sample_description.columns:
+        color_max = sample_description.track_color.max(axis=0)
     else:
         color_max = sample_description.shape[0]
     colors = np.array(sns.color_palette("colorblind", color_max))*255
@@ -820,7 +820,7 @@ def make_url(project, experiment, sam_dir, sam_files, genome_size,
     f = open(sam_dir/'bigwigCaller.txt', 'w')
     for strand in ['+', '-']:
         for sample in bw_samples:
-            color = colors[sample_description.loc[sample].genome_browser_track_color - 1, ]
+            color = colors[sample_description.loc[sample].track_color - 1, ]
             color = ','.join([str(int(c)) for c in color])
             track = (f'track type=bigWig visibility=2 alwaysZero=on color={color} '
                      f'graphType=bar maxHeightPixels=30:30:30 itemRgb=On group='
