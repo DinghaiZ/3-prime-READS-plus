@@ -1,5 +1,6 @@
-projects/project_1/scripts/experiment_1/.ipynb_checkpoints/Phase-1-checkpoint.ipynb
-projects/project_1/scripts/experiment_1/.ipynb_checkpoints/Phase-2-checkpoint.ipynb
+projects/project_1/scripts/experiment_1/.ipynb_checkpoints/
+.ipynb_checkpoints/
+projects/project_1/results/
 *.pyc
 *.gz
 .vscode/settings.json
