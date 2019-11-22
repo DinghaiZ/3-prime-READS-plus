@@ -18,7 +18,7 @@ However, long T-streches can also mislead alignment of the reads to the genome. 
 To solve the above issues, this pipeline will trim 5' T-streches while recording T-strech length, map (using [STAR](https://github.com/alexdobin/STAR)) cleaned reads to the genome, and use the recorded T-strech length and genomic alignment result to identify PASS (PolyA Site Supporting) reads, which are defined as reads containing >= 2 extra Ts originated from the poly(A) tail but not from the genome. Each PASS read comes from a cleavage and polyadenylation site (CPS) in the genome. Due to microheterogeneity during cleavage and polyadenylation, the CPSs tend to form clusters in a small window in the genome. Therefore PASS reads within a 24-nt window are clustered to define a pA site (PAS). The numbers of PASS reads mapped to genome-wide CPS and PAS in different input sample are then used for further analysis: 
 
 <p align="center">
-  <img src="images/pipeline.png" width="500" height="250" class="center">
+  <img src="images/pipeline.png" width="800" height="375" class="center">
 </p>
 
 **The pipeline has the following two parts:**
@@ -28,6 +28,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 **[Part 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb). pA site annotation and feature extraction.**  
 
 **What are in each folder?**
+
 *modules*: Definitions of functions and classes used in the pipeline.
 *notebooks*: Template Jupyter notebooks that should be copied into each /projects/project_name/experiment_name folder, edited, and run for each experiment under different projects.
 *projects*: A tree-like directory containing one *project_name/experiment_name* folder for each experiment under different projects. Within each *project_name/experiment_name* folder, there are three subfolders: *notebooks* (code for project and experiment-specific analysis), *data* (data for project and experiment-specific analysis), and *results* (analysis results). 
