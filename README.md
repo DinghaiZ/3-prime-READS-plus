@@ -24,8 +24,8 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 
 **The pipeline has the following two parts:**
 
-**[Part 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb).** 
-1. Read configurations for the pipeline
+**[Part 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb):** 
+1. Register analysis configurations for specific project/experiment
 2. Read sample annotation file
 3. Search, download, merge, and QC fastq files 
 4. FASTQ QC and calculate length of random nucleotides in 3' ligation adapter
@@ -38,7 +38,9 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 11. Generate summary statistics of 5' T-stretch lengths
 12. Create genome browser tracks for visualizing both PASS and nonPASS reads 
 
-**[Part 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb).** pA site annotation and feature extraction.  
+**[Part 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb):** 
+1. pA site annotation
+2. Feature extraction.  
 
 
 ## What are in each folder?
