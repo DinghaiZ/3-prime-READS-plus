@@ -33,7 +33,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 
 **modules**: Definitions of functions and classes used in the pipeline.
 
-**notebooks**: Template Jupyter notebooks that should be copied into each /projects/project_name/experiment_name folder, edited, and run for each experiment under different projects.
+**notebooks**: Template Jupyter notebooks that should be copied into each */projects/project_name/experiment_name* folder, edited, and run for each experiment under different projects.
 
 **projects**: A tree-like directory containing one *project_name/experiment_name* folder for each experiment under different projects. Within each *project_name/experiment_name* folder, there are three subfolders: *notebooks* (code for project and experiment-specific analysis), *data* (data for project and experiment-specific analysis), and *results* (analysis results). The *data* and *results* subfolders will be automatically created by the notebooks. 
 
