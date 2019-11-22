@@ -25,7 +25,7 @@ Before each analysis, please do the following:
 2. Edit the analysis configuration sections of the notebooks.
 3. Run the notebooks.
 
-**[Part 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/notebooks/Part-1.ipynb). Read QC, generate PASS read count matrix, and visualize PASS and nonPASS reads in UCSC genome browser.**
+**[Part 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb). Read QC, generate PASS read count matrix, and visualize PASS and nonPASS reads in UCSC genome browser.**
 
-**[Part 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/notebooks/Part-2.ipynb). pA site annotation and feature extraction.**  
+**[Part 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb). pA site annotation and feature extraction.**  
 
