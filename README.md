@@ -24,9 +24,9 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 
 **The pipeline has the following two parts:**
 
-**[Part 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb). Read QC, generate PASS read count matrix, and visualize PASS and nonPASS reads in UCSC genome browser.**
+[Part 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb). Read QC, generate PASS read count matrix, and visualize PASS and nonPASS reads in UCSC genome browser.
 
-**[Part 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb). pA site annotation and feature extraction.**  
+[Part 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb). pA site annotation and feature extraction.  
 
 
 ## What are in each folder?
