@@ -7,7 +7,7 @@ About 70% of mRNA genes in eukaryotes contain multiple cleavage and polyadenylat
   <img src="images/flowchart.jpg" width="500" height="500">
 </p>
 
-Steming from incomplete digestion of the poly(A) tail and absent from the genome, the T-streches at the 5' end of the reads can be used to identify cleavage and polyadenylation sites in the genome:
+Steming from incomplete digestion of the poly(A) tail by RNaseH, the T-streches at the 5' end of the reads can be used to identify cleavage and polyadenylation sites in the genome, because these T-streches cannot be aligned with the genomic sequence:
 
 <p align="center">
   <img src="images/read.jpg" width="350" height="210" class="center">
@@ -47,7 +47,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 
 **Before each analysis, please do the following:**
 1. git clone the repo to your system.
-2. Copy the notebooks folder into the 'projects/project_name/experiment_name' folder. You can name the projects and experiments the way you want.
+2. Copy the *notebooks* folder into a *projects/project_name/experiment_name* folder. You can name the projects and experiments the way you want.
 3. Edit the analysis configuration sections (at the beginning) of the notebooks for project and experiment-specific analysis.
 4. Make sure that 3rd party softwares have been installed on your system and are in your path.
 5. Run the notebooks and have fun!
