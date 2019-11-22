@@ -10,7 +10,7 @@ About 70% of mRNA genes in eukaryotes contain multiple cleavage and polyadenylat
 Steming from incomplete digestion of the poly(A) tail by RNaseH, the T-streches at the 5' end of the reads can be used to identify cleavage and polyadenylation sites in the genome, because these T-streches cannot be aligned with the genomic sequence:
 
 <p align="center">
-  <img src="images/read.jpg" width="350" height="210" class="center">
+  <img src="images/read.jpg" width="300" height="180" class="center">
 </p>
 
 However, long T-streches can also mislead alignment of the reads to the genome. In addition, due to micro-heterogeneity, the mapped reads that are close to each other in the genome need to be clustered into cleavage and polyadenylation (pA) sites.
