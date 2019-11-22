@@ -29,8 +29,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 **[Part 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb). pA site annotation and feature extraction.**  
 
 
-
-**What are in each folder?**
+## What are in each folder?
 
 *modules*: Definitions of functions and classes used in the pipeline.
 
@@ -47,7 +46,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 ## Quick Start
 
 **Before each analysis, please do the following:**
-1. git clone the repo to your computer.
+1. git clone the repo to your system.
 2. Copy the notebooks folder into the 'projects/project_name/experiment_name' folder. You can name the projects and experiments the way you want.
 3. Edit the analysis configuration sections (at the beginning) of the notebooks for project and experiment-specific analysis.
 4. Make sure that 3rd party softwares have been installed on your system and are in your path.
