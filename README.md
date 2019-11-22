@@ -24,7 +24,19 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 
 **The pipeline has the following two parts:**
 
-**[Part 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb).** Read QC, generate PASS read count matrix, and visualize PASS and nonPASS reads in UCSC genome browser.
+**[Part 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb).** 
+1. Read configurations for the pipeline
+2. Read sample annotation file
+3. Search, download, merge, and QC fastq files 
+4. FASTQ QC and calculate length of random nucleotides in 3' ligation adapter
+5. Trim 3' adapter
+6. Trim 5' Ts while recording information about the trimmed sequences 
+7. Map the trimmed reads to the genome 
+8. Identify PASS reads and unique PASS reads using recorded information from the 5'T trimming step 
+9. Cluster neighboring PASS reads in the genome to define poly(A) sites 
+10. Generate summary statistics of read numbers 
+11. Generate summary statistics of 5' T-stretch lengths
+12. Create genome browser tracks for visualizing both PASS and nonPASS reads 
 
 **[Part 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb).** pA site annotation and feature extraction.  
 
