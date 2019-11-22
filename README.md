@@ -31,7 +31,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 
 ## What are in each folder?
 
-**modules**: Definitions of functions and classes used in the pipeline.
+**[modules](https://github.com/DinghaiZ/3-prime-READS-plus/tree/master/modules)**: Definitions of functions and classes used in the pipeline.
 
 **notebooks**: Template Jupyter notebooks that should be copied into each */projects/project_name/experiment_name* folder, edited, and run for each experiment under different projects.
 
