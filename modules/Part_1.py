@@ -11,7 +11,7 @@ import seaborn as sns
 import multiprocessing as mp
 from time import sleep
 import sys
-# sys.path.append('/home/dinghai/dev/3-prime-READS-plus/modules')
+sys.path.append(str(Path('../../../../modules'))) 
 import PASS as ps
 
 
@@ -125,7 +125,7 @@ else:
 sample_description = sample_description.set_index('sample')
 
 print("\nSample description:")
-display(sample_description)    
+sample_description
 
 print('The following colors will be used for UCSC genome browser tracks:')
 
@@ -215,7 +215,7 @@ if len(fastq_files) == 0:
     
 WORKERS = min(MAX_WORKERS, len(fastq_files))
 
-print(f'\n{WORKERS} workers will be used for all (except mapping) parallel computing.')
+print(f'\n{WORKERS} workers will be used for all (except mapping) parallel computing.') 
 
 # Count raw fastq records in fastq files in parallel:
 with mp.Pool(processes=WORKERS) as pool:
@@ -226,7 +226,7 @@ raw_fastq_counts["File_Name"] = raw_fastq_counts["File_Name"].str.replace('.fast
 raw_fastq_counts = raw_fastq_counts.set_index("File_Name")
 
 print('\nRaw fastq count in each file:')
-raw_fastq_counts
+raw_fastq_counts 
 
 
 
@@ -242,15 +242,16 @@ random_NT_lens
 ## 5. Clip adapters
 cmds = [] 
 for sample_name in sample_description.index:
-    fastq_file = str(rawfastq_dir/f'{sample_name}.fastq')
+    fastq_file = str(fastq_dir/f'{sample_name}.fastq')
     read_type = sample_description.loc[sample_name, 'read_type']
     if read_type == 'single':
-        cmd = (f'cutadapt -a NNNNTGGAATTCTCGGGTGCCAAGG -n 1 -O 10 -m {CUTADAPT_MINLEN} -f fastq -q 10 {fastq_file} '
-               f'-o {fastq_file.replace(".fastq", ".cut.fastq").replace("rawfastq", "fastq")} '
+        cmd = (f'cutadapt -a NNNNTGGAATTCTCGGGTGCCAAGG -n 1 -O 10 -m {CUTADAPT_MINLEN} '
+               f'-f fastq -q 10 {fastq_file} '
+               f'-o {fastq_file.replace(".fastq", ".cut.fastq")} '
                f'&& rm {fastq_file}')
     elif read_type == 'paired':
-        cmd = (f'cutadapt -u -75 -a NNNNTGGAATTCTCGGGTGCCAAGG -n 1 -O 10 -m {CUTADAPT_MINLEN} -f fastq '
-               f'-q 10 {fastq_file} -o {fastq_file.replace(".fastq", ".cut.fastq").replace("rawfastq", "fastq")} '
+        cmd = (f'cutadapt -u -75 -a NNNNTGGAATTCTCGGGTGCCAAGG -n 1 -O 10 -m {CUTADAPT_MINLEN} '
+               f'-f fastq -q 10 {fastq_file} -o {fastq_file.replace(".fastq", ".cut.fastq")} '
                f'&& rm {fastq_file}')
     cmds.append(cmd)
 
@@ -260,21 +261,27 @@ print('\n'.join([fastq_file.split('/')[-1] for fastq_file in fastq_files]))
 with mp.Pool(processes = WORKERS) as pool: 
     pool.map(os.system, cmds)
     
-print('\nDone!')
+print('\nDone!')   
 
 
 
 
 
 ## 6. Trim 5' Ts
-cutadapt_outputs = sorted([str(filename.absolute()) for filename in fastq_dir.glob('*cut.fastq')])
+cutadapt_outputs = sorted([str(filename.absolute()) 
+                           for filename in fastq_dir.glob('*cut.fastq')])
 
 print("\nTrimming 5' T-stretches from fastq reads in the following files:\n") 
 print('\n'.join([fastq_file.split('/')[-1] for fastq_file in cutadapt_outputs]))
 
 with mp.Pool(processes = WORKERS) as pool:
     trimmed_fastq_counts = pool.starmap(ps.trim_write_count_fastq, 
-                            list(zip(cutadapt_outputs, list(random_NT_lens), [4]*len(random_NT_lens))))
+                                        list(zip(cutadapt_outputs, 
+                                                 list(random_NT_lens), 
+                                                 [4]*len(random_NT_lens)
+                                                )
+                                            )
+                                       )
     
 if SAVE_SPACE:
     cmd = 'rm ' + ' '.join(cutadapt_outputs)
@@ -282,8 +289,10 @@ if SAVE_SPACE:
 
 print('\nDone!')
 
-trimmed_fastq_counts = pd.DataFrame(trimmed_fastq_counts, columns = ["File_Name", "Cut", "Trimmed"])
-trimmed_fastq_counts["File_Name"] = trimmed_fastq_counts["File_Name"].str.replace('.cut.fastq', '')  
+trimmed_fastq_counts = pd.DataFrame(trimmed_fastq_counts, 
+                                    columns = ["File_Name", "Cut", "Trimmed"])
+trimmed_fastq_counts["File_Name"] = trimmed_fastq_counts["File_Name"]\
+                                    .str.replace('.cut.fastq', '')  
 trimmed_fastq_counts = trimmed_fastq_counts.set_index("File_Name")
 fastq_counts = pd.concat([raw_fastq_counts, trimmed_fastq_counts], axis = 1)
 
