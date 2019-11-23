@@ -1421,7 +1421,9 @@ get_exonic_3UTR = function(df = pA.df, threeUTRs = threeUTRs, geno = "mm9"){
                                      end = pA_3UTR_df$pA_pos, 
                                      names = pA_3UTR_df$pAid),
                     strand = pA_3UTR_df$strand,
-                    cds_end = pA_3UTR_df$cds_end)
+                    cds_start = pA_3UTR_df$cds_start,
+                    cds_end = pA_3UTR_df$cds_end
+                    )
   
   
   olp = findOverlaps(pA_3UTR+3, threeUTRs)
@@ -1812,9 +1814,9 @@ motifFisher = function(df = pA.df, keyPattern = "tail_length", minReadCount = 10
   
   ## calculate from, to
   if(sequenceRegion == "3UTR"){
-    from = "cds_end"
+    from = "cds_ends"
     to = "pA_pos"
-    df = subset(df, !is.na(cds_end)) # remove ncRNA
+    df = subset(df, !is.na(cds_start) & !is.na(cds_end)) # remove ncRNA
   }else if(sequenceRegion == "aUTR"){
     from = "proximal_pA_pos"
     to = "distal_pA_pos"
@@ -1883,33 +1885,33 @@ inf.omit = function(df){
   df[index,]
 }
 
-UTR3_with_oligo_counts = function(df=utr3, from = "cds_end", to = "pA_pos", width=6, 
-                                  geno = "mm9", keep_sequence = F){
-  require(GenomicRanges)
-  require(Biostrings)
-  gr = GRanges(seqnames = df$chr, 
-               ranges = IRanges(start = pmin(df[,from], df[,to]), 
-                                end = pmax(df[,from], df[,to])),
-               strand = df$strand)
-  
-  if(geno == "mm9"){
-    require(BSgenome.Mmusculus.UCSC.mm9) 
-    gr = getSeq(Mmusculus, gr)
-  }else if(geno == "hg19"){
-    require("BSgenome.Hsapiens.UCSC.hg19") 
-    gr = getSeq(Hsapiens, gr)
-  }
-  
-  counts = oligonucleotideFrequency(gr, width = width, step = 1)
-  #df_with_oligo_counts = cbind(df, apply(counts, 2, log10))
-  if(keep_sequence){
-    sequence = as.character(gr)
-    df_with_oligo_counts = cbind(df, counts, sequence)
-  }else{
-    df_with_oligo_counts = cbind(df, counts)
-  }
-  df_with_oligo_counts
-}
+# UTR3_with_oligo_counts = function(df=utr3, from = "cds_end", to = "pA_pos", width=6, 
+#                                   geno = "mm9", keep_sequence = F){
+#   require(GenomicRanges)
+#   require(Biostrings)
+#   gr = GRanges(seqnames = df$chr, 
+#                ranges = IRanges(start = pmin(df[,from], df[,to]), 
+#                                 end = pmax(df[,from], df[,to])),
+#                strand = df$strand)
+#   
+#   if(geno == "mm9"){
+#     require(BSgenome.Mmusculus.UCSC.mm9) 
+#     gr = getSeq(Mmusculus, gr)
+#   }else if(geno == "hg19"){
+#     require("BSgenome.Hsapiens.UCSC.hg19") 
+#     gr = getSeq(Hsapiens, gr)
+#   }
+#   
+#   counts = oligonucleotideFrequency(gr, width = width, step = 1)
+#   #df_with_oligo_counts = cbind(df, apply(counts, 2, log10))
+#   if(keep_sequence){
+#     sequence = as.character(gr)
+#     df_with_oligo_counts = cbind(df, counts, sequence)
+#   }else{
+#     df_with_oligo_counts = cbind(df, counts)
+#   }
+#   df_with_oligo_counts
+# }
 
 
 ####
@@ -1955,11 +1957,9 @@ fishermain = function(df = tmp_n, keys, sequenceRegions = "3UTR",
                    strand = df$strand)
     }else if(sequenceRegion == "3UTR"){
       df = subset(df, region=="3UTR")
-      from = "cds_end" 
-      to = "pA_pos" 
       gr = GRanges(seqnames = df$chr, 
-                   ranges = IRanges(start = pmin(df[,from], df[,to]), 
-                                    end = pmax(df[,from], df[,to])),
+                   ranges = IRanges(start = pmin(pmax(df$cds_start, df$cds_end), df$pA_pos), 
+                                    end = pmax(pmin(df$cds_start, df$cds_end), df$pA_pos)),
                    strand = df$strand)
     }else if(grepl("-?\\d+_-?\\d+", sequenceRegion)){ # sequenceRegion = "-100_-41"
       from = as.integer(strsplit(sequenceRegion, "_")[[1]][1])
@@ -3655,7 +3655,7 @@ create_3UTR_from_pAs = function(pA.df){
   df$strand = sub("chr.+([+-])\\d+$", "\\1", df$pAid)
   df$pos = as.numeric(sub("chr.+[+-](\\d+)$", "\\1", df$pAid))
   df$start = as.numeric(ifelse(df$strand == "+", df$cds_end + 1, df$pos))
-  df$end = as.numeric(ifelse(df$strand == "+", df$pos, df$cds_end - 1))
+  df$end = as.numeric(ifelse(df$strand == "+", df$pos, df$cds_start - 1))
   df = df[df$end >= df$start, ]
   df[, c("pos", "cds_end", "cds_start")] = NULL
   df = df[complete.cases(df),]
@@ -3667,13 +3667,13 @@ create_3UTR_from_pAs = function(pA.df){
 create_cUTR_aUTR_from_pAs = function(pair.pA, pA.df){
   require(GenomicRanges)
   
-  pair.pA = merge(pair.pA, unique(na.omit(pA.df[, c("gene_symbol", "cds_end")])), sort = F)
-  df = pair.pA[, c("gene_symbol", "distal_pA", "cds_end")]
+  pair.pA = merge(pair.pA, unique(na.omit(pA.df[, c("gene_symbol", "cds_start", "cds_end")])), sort = F)
+  df = pair.pA[, c("gene_symbol", "distal_pA", "cds_start", "cds_end")]
   df$chr = sub("(chr.+)[+-]\\d+$", "\\1", df$distal_pA)
   df$strand = sub("chr.+([+-])\\d+$", "\\1", df$distal_pA)
   df$pos = sub("chr.+[+-](\\d+)$", "\\1", df$distal_pA)
   df$start = ifelse(df$strand == "+", df$cds_end + 1, df$pos)
-  df$end = ifelse(df$strand == "+", df$pos, df$cds_end - 1)
+  df$end = ifelse(df$strand == "+", df$pos, df$cds_start - 1)
   df = df[df$end >= df$start, ]
   df$pos = NULL
   df$pAid = df$distal_pA
@@ -3681,19 +3681,19 @@ create_cUTR_aUTR_from_pAs = function(pair.pA, pA.df){
   # dUTR: UTR using the "Distal" pA
   dUTR = makeGRangesFromDataFrame(df, keep.extra.columns=T)
   
-  df = pair.pA[, c("gene_symbol", "proximal_pA", "cds_end")]
+  df = pair.pA[, c("gene_symbol", "proximal_pA", "cds_start", "cds_end")]
   df$chr = sub("(chr.+)[+-]\\d+$", "\\1", df$proximal_pA)
   df$strand = sub("chr.+([+-])\\d+$", "\\1", df$proximal_pA)
   df$pos = sub("chr.+[+-](\\d+)$", "\\1", df$proximal_pA)
   df$start = ifelse(df$strand == "+", df$cds_end + 1, df$pos)
-  df$end = ifelse(df$strand == "+", df$pos, df$cds_end - 1)
+  df$end = ifelse(df$strand == "+", df$pos, df$cds_start - 1)
   df = df[df$end >= df$start, ]
   df$pos = NULL
   df$pAid = df$proximal_pA
   df$proximal_pA = NULL
   cUTR = makeGRangesFromDataFrame(df, keep.extra.columns=T)
   
-  df = pair.pA[, c("gene_symbol", "cds_end", "proximal_pA", "distal_pA")]
+  df = pair.pA[, c("gene_symbol", "cds_start", "cds_end", "proximal_pA", "distal_pA")]
   df$chr = sub("(chr.+)[+-]\\d+$", "\\1", df$proximal_pA)
   df$strand = sub("chr.+([+-])\\d+$", "\\1", df$proximal_pA)
   df$pos1 = sub("chr.+[+-](\\d+)$", "\\1", df$proximal_pA)
@@ -3703,8 +3703,6 @@ create_cUTR_aUTR_from_pAs = function(pair.pA, pA.df){
   df = df[df$end >= df$start, ]
   df$pos1 = NULL
   df$pos2 = NULL
-  # df$distal_pA = NULL
-  # df$proximal_pA = NULL
   aUTR = makeGRangesFromDataFrame(df, keep.extra.columns=T)
   aUTR = aUTR[aUTR$gene_symbol %in% cUTR$gene_symbol]
   
@@ -3719,7 +3717,8 @@ create_cUTR_aUTR_from_pAs = function(pair.pA, pA.df){
 
 ####
 create_conserved_cUTR_aUTR_from_polyA_DB = function(geno = "mm9"){
-  # geno can only be "mm9" or "hg19"
+  ### geno can only be "mm9" or "hg19"
+  ### In this function, cds_end means the last position of the stop codon.
   require(dplyr)
   require(tidyr)
   require(GenomicRanges)
@@ -3940,17 +3939,16 @@ add_hg19_Alu = function(pA.df, ignore.intron.Alu = T, keep.alu.direction = F){
     dplyr::filter(num_Alu < 100)
   
   
-  df$alu.s = !is.na(df$alu.directions) & !grepl("as", df$alu.directions)
-  df$alu.as = !is.na(df$alu.directions) & grepl("as", df$alu.directions) & !grepl("^s", df$alu.directions) & !grepl("[^a]s", df$alu.directions)
+  df$alu.s = !is.na(df$alu.directions) & !grepl("as", df$alu.directions) # s only
+  df$alu.as = !is.na(df$alu.directions) & grepl("as", df$alu.directions) & !grepl("^s", df$alu.directions) & !grepl("[^a]s", df$alu.directions) # as only
   df$alu.as.s = !is.na(df$alu.directions) & grepl("as;s", df$alu.directions)
-  df$alu.s.as = !is.na(df$alu.directions) & grepl("[^a]s;as", df$alu.directions) 
+  df$alu.s.as = !is.na(df$alu.directions) & grepl("(^s|[^a]s);as", df$alu.directions) # bug: "[^a]s;as" 
   
   require(stringr)
-  # df$num_IRAlu = str_count(df$alu.directions, pattern = "as;s") + str_count(df$alu.directions, pattern = "[^a]s;as") - str_count(df$alu.directions, pattern = "as;s;as") -   str_count(df$alu.directions, pattern = "[^a]s;as;s")
+  # Number of possible pairs of as/s or s/as is the min of number of s and number of as.
   df$num_IRAlu = pmin(str_count(df$alu.directions, pattern = "[^a]s|^s"), str_count(df$alu.directions, pattern = "as"))
-  IRAlu = df$alu.as.s | df$alu.s.as
   
-  df$Alu_type = ifelse(IRAlu, "IRAlu", df$num_Alu)
+  df$Alu_type = ifelse(df$alu.as.s | df$alu.s.as, "IRAlu", df$num_Alu)
   
   df$Alu_type[!df$Alu_type %in% c("1", "2", "IRAlu")] = ">=3"
   
@@ -3958,6 +3956,133 @@ add_hg19_Alu = function(pA.df, ignore.intron.Alu = T, keep.alu.direction = F){
     df = df[, c("pAid", "Alu_type", "num_Alu", "num_IRAlu", "alu.s", "alu.as", "alu.as.s", "alu.s.as", "alu.directions")]
   }else{
     df = df[, c("pAid", "Alu_type", "num_Alu", "num_IRAlu", "alu.s", "alu.as", "alu.as.s", "alu.s.as")]
+  }
+  pA.df = merge(pA.df, df, by = "pAid", all.x=T)
+  pA.df$Alu_type[is.na(pA.df$Alu_type)] = "0"
+  pA.df$num_Alu[is.na(pA.df$num_Alu)] = 0
+  pA.df$num_IRAlu[is.na(pA.df$num_IRAlu)] = 0
+  
+  pA.df
+}
+
+
+add_hg19_Alu = function(pA.df, ignore.intron.Alu = T, keep.alu.direction = F){
+  # Download the repeat makser file from https://genome.ucsc.edu/cgi-bin/hgTables:
+  # Group: Repeats; track: RepeatMasker; table: rmsk; region: genome; output format: all fields from selected table; output file: hg19_rmsk
+  
+  # Schema for RepeatMasker:
+  
+  # field   	example	      SQL type	            description
+  # bin	      585	          smallint(5) unsigned	Indexing field to speed chromosome range queries.
+  # swScore	  1504	        int(10) unsigned	    Smith Waterman alignment score
+  # milliDiv	13	          int(10) unsigned	    Base mismatches in parts per thousand
+  # milliDel	4	            int(10) unsigned	    Bases deleted in parts per thousand
+  # milliIns	13	          int(10) unsigned	    Bases inserted in parts per thousand
+  # genoName	chr1	        varchar(255)	        Genomic sequence name
+  # genoStart	10000	        int(10) unsigned	    Start in genomic sequence
+  # genoEnd	  10468	        int(10) unsigned	    End in genomic sequence
+  # genoLeft	-249240153	  int(11)	              -#bases after match in genomic sequence
+  # strand	  +	            char(1)	              Relative orientation + or -
+  # repName	  (CCCTAA)n	    varchar(255)	        Name of repeat
+  # repClass	Simple_repeat	varchar(255)	        Class of repeat
+  # repFamily	Simple_repeat	varchar(255)	        Family of repeat
+  # repStart	1	            int(11)	              Start (if strand is +) or -#bases after match (if strand is -) in repeat sequence
+  # repEnd	  463	          int(11)	              End in repeat sequence
+  # repLeft	  0	            int(11)	              -#bases after match (if strand is +) or start (if strand is -) in repeat sequence
+  # id	      1	            char(1)	              First digit of id field in RepeatMasker .out file. Best ignored.
+  
+  
+  input_file = "/home/dinghai/projects/fud/hg19_rmsk"
+  rmsk = read.table(input_file, header = T, sep = "\t", as.is = T, comment.char = "")
+  alu = subset(rmsk, repFamily == "Alu", select = names(rmsk)[c(2:11, 14:16)])
+  # "repStart" and "repLeft" have opposite signs. If "strand" is "+", "repStart" is positive.
+  # If "strand" is "+": the sequence between "genoStart" and "genoEnd" on the positive strand is similar to the "repName"
+  # If "strand" is "-": the sequence between "genoStart" and "genoEnd" on the minus strand is similar to the "repName"
+  
+  # If a 3'UTR is on the "+" strand and it contains an Alu element defined by ("genoName", "genoStart", "genoEnd", "strand"):
+  #    if the Alu "strand" is "+": the Alu in 3'UTR is "S" (sense)
+  #    if the Alu "strand" is "-": the Alu in 3'UTR is "AS" (anti-sense)
+  # If a 3'UTR is on the "-" strand and it contains an Alu element defined by ("genoName", "genoStart", "genoEnd", "strand"):
+  #    if the Alu "strand" is "+": the Alu in 3'UTR is "AS" (anti-sense)
+  #    if the Alu "strand" is "-": the Alu in 3'UTR is "S" (sense)
+  
+  alu$alu.id = 1:nrow(alu)
+  
+  ############# Map Alu to 3'UTRs
+  require(GenomicRanges)
+  pA.gr = create_3UTR_from_pAs(pA.df)
+  # utr3 = subset(pA.df, region == "3UTR" & cds_end > 0, c("gene_symbol", "pAid", "chr", "strand", "cds_start", "cds_end", "pA_pos"))
+  # idx = ifelse(utr3$strand == "+", utr3$cds_end < utr3$pA_pos, utr3$cds_end > utr3$pA_pos)
+  # utr3 = utr3[idx,]
+  # idx = ifelse(utr3$strand == "+", utr3$cds_end > utr3$cds_start, utr3$cds_end < utr3$cds_start)
+  # utr3 = utr3[idx,]
+  # 
+  # pA.pos = makeGRangesFromDataFrame(subset(utr3, strand == "+"), keep.extra.columns = T, start.field="cds_end", end.field="pA_pos")
+  # # Wrong:
+  # # pA.neg = makeGRangesFromDataFrame(subset(utr3, strand == "-"), keep.extra.columns = T, end.field="cds_end", start.field="pA_pos")
+  # pA.neg = makeGRangesFromDataFrame(subset(utr3, strand == "-"), keep.extra.columns = T, end.field="cds_start", start.field="pA_pos")
+  # pA.gr = c(pA.pos, pA.neg)
+  
+  alu.s = alu[, c("genoName", "genoStart", "genoEnd", "strand", "repName", "repStart", "repEnd", "alu.id")] ## Sense
+  names(alu.s) = c("chr", "start", "end", "strand", "repName", "repStart", "repEnd", "alu.id")
+  alu.a = alu.s
+  alu.a$strand = ifelse(alu.a$strand == "+", "-", "+")
+  
+  alu.s.gr = makeGRangesFromDataFrame(alu.s, keep.extra.columns = T) ## Sense
+  alu.a.gr = makeGRangesFromDataFrame(alu.a, keep.extra.columns = T) ## Antisense
+  
+  # Remove alu in introns first
+  if(ignore.intron.Alu){
+    txdb = loadDb("../../../fud/hg19.refGene.txdb.sqlite")
+    introns = intronsByTranscript(txdb)
+    alu.s.gr = subsetByOverlaps(alu.s.gr, introns, type = "within", invert = T)
+    alu.a.gr = subsetByOverlaps(alu.a.gr, introns, type = "within", invert = T)
+  }
+  
+  pA.alu.s = mergeByOverlaps(alu.s.gr, pA.gr, type="within")
+  pA.alu.s$direction = "s"
+  names(pA.alu.s)[1] = "alu.gr"
+  
+  pA.alu.a = mergeByOverlaps(alu.a.gr, pA.gr, type="within")
+  pA.alu.a$direction = "a"
+  names(pA.alu.a)[1] = "alu.gr"
+  
+  pA.alu = rbind(pA.alu.s, pA.alu.a)
+  names(pA.alu) = sub("^pA.gr$", "utr3.gr", names(pA.alu))
+  pA.alu$alu.gr = as.character(pA.alu$alu.gr)     
+  pA.alu$utr3.gr = as.character(pA.alu$utr3.gr)  
+  
+  require(dplyr)
+  require(tidyr)
+  df = as.data.frame(pA.alu) %>% 
+    mutate(signed.start = as.numeric(sub(".+?:(\\d+?)-\\d+:([+-])", "\\2\\1", alu.gr))) %>% 
+    group_by(gene_symbol, pAid, utr3.gr) %>%
+    arrange(signed.start) %>%
+    summarize(num_Alu = n(), 
+              alu.directions = paste(direction, collapse=";"), 
+              repNames = paste(repName, collapse=";"), 
+              alu.ids = paste(alu.id, collapse=";"),
+              alu.grs = paste(alu.gr, collapse=";")) %>%
+    dplyr::filter(num_Alu < 100)
+  
+  
+  df$alu.s = !is.na(df$alu.directions) & !grepl("a", df$alu.directions) # s only
+  df$alu.a = !is.na(df$alu.directions) & !grepl("s", df$alu.directions) # a only
+  df$alu.a.s = !is.na(df$alu.directions) & grepl("a;s", df$alu.directions)
+  df$alu.s.a = !is.na(df$alu.directions) & grepl("s;a", df$alu.directions) 
+  
+  require(stringr)
+  # Number of possible pairs of a/s or s/a is the min of number of s and number of a.
+  df$num_IRAlu = pmin(str_count(df$alu.directions, pattern = "s"), str_count(df$alu.directions, pattern = "a"))
+  
+  df$Alu_type = ifelse(df$alu.a.s | df$alu.s.a, "IRAlu", df$num_Alu)
+  
+  df$Alu_type[!df$Alu_type %in% c("1", "2", "IRAlu")] = ">=3"
+  
+  if(keep.alu.direction){
+    df = df[, c("pAid", "Alu_type", "num_Alu", "num_IRAlu", "alu.s", "alu.a", "alu.a.s", "alu.s.a", "alu.directions")]
+  }else{
+    df = df[, c("pAid", "Alu_type", "num_Alu", "num_IRAlu", "alu.s", "alu.a", "alu.a.s", "alu.s.a")]
   }
   pA.df = merge(pA.df, df, by = "pAid", all.x=T)
   pA.df$Alu_type[is.na(pA.df$Alu_type)] = "0"
