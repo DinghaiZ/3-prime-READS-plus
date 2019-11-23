@@ -27,7 +27,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 **[Part 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb):** 
 1. Register analysis configurations for specific project/experiment
 2. Read sample annotation file
-3. Search, download, merge, and QC fastq files 
+3. Search, download, and merge fastq files 
 4. FASTQ QC and calculate length of random nucleotides in 3' ligation adapter
 5. Trim 3' adapter
 6. Trim 5' Ts while recording information about the trimmed sequences 
@@ -35,7 +35,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 8. Identify PASS reads and unique PASS reads using recorded information from the 5'T trimming step 
 9. Cluster neighboring PASS reads in the genome to define poly(A) sites 
 10. Generate summary statistics of read numbers 
-11. Generate summary statistics of 5' T-stretch lengths
+11. Generate summary statistics of 5' T-stretch lengths in both PASS and nonPASS reads 
 12. Create genome browser tracks for visualizing both PASS and nonPASS reads 
 
 **[Part 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb):** 
@@ -51,9 +51,9 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 
 **[projects](https://github.com/DinghaiZ/3-prime-READS-plus/tree/master/projects)**: A tree-like directory containing one *project_name/experiment_name* folder for each experiment under different projects. Within each *project_name/experiment_name* folder, there are three subfolders: *notebooks* (code for project and experiment-specific analysis), *data* (data for project and experiment-specific analysis), and *results* (analysis results). The *data* and *results* subfolders will be automatically created by the notebooks. 
 
-**tests**: Code for testing my pipeline during development. Not needed for running the notebooks.
+**tests**: Code for testing the pipeline during development. Not needed for running the notebooks.
 
-**images**: Images displayed in the README and notebooks on github. Not needed for running the notebooks.
+**images**: Images displayed in the README on github. Not needed for running the notebooks.
 
 
 
