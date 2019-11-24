@@ -24,7 +24,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 
 **The pipeline has the following two parts:**
 
-**[Part 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb):** 
+**[Part 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.html):** 
 1. Register analysis configurations for specific project/experiment
 2. Read sample annotation file
 3. Search, download, and merge fastq files 
@@ -38,9 +38,17 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 11. Generate summary statistics of 5' T-stretch lengths in both PASS and nonPASS reads 
 12. Create genome browser tracks for visualizing both PASS and nonPASS reads 
 
-**[Part 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb):** 
-1. pA site annotation
-2. Feature extraction.  
+**[Part 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.html):** 
+1. Register settings for this analysis. One experiment can be analysed with different settings. The results for each setting will be saved in different folders in the *result_dir* directory. 
+2. Extend annotated 3'UTR regions to allow identification of new pA sites in previously poorly annotated 3'UTRs. 
+3. Assign pA clusters identified in Part 1 to genomic features such as extended 3'UTRs, introns, CDSs, and 5'UTRs.
+4. Resolve pA sites mapped to multiple genes.
+5. Map intergenic and intronic pA sites to Non-Coding RNAs (ncRNAs).
+6. Map intergenic pA sites to Upstream Antisense RNAs (uaRNAs).
+7. Map intergenic pA sites to mitochondria.
+8. Optionally resolve pA sites mapped to multiple genomic features of the same gene.
+9. Plot distribution of pA sites and PASS reads in different genomic features of each sample.
+10. Calculate optimal Transcript Starting Sites (TSSs).
 
 
 ## What are in each folder?
@@ -49,7 +57,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 
 **[notebooks](https://github.com/DinghaiZ/3-prime-READS-plus/tree/master/notebooks)**: Template Jupyter notebooks that should be copied into each */projects/project_name/experiment_name* folder, edited, and run for each experiment under different projects.
 
-**[projects](https://github.com/DinghaiZ/3-prime-READS-plus/tree/master/projects)**: A tree-like directory containing one *project_name/experiment_name* folder for each experiment under different projects. Within each *project_name/experiment_name* folder, there are three subfolders: *notebooks* (code for project and experiment-specific analysis), *data* (data for project and experiment-specific analysis), and *results* (analysis results). The *data* and *results* subfolders will be automatically created by the notebooks. 
+**[projects](https://github.com/DinghaiZ/3-prime-READS-plus/tree/master/projects)**: A tree-like directory containing one *project_name/experiment_name* folder for each experiment under different projects. Within each *project_name/experiment_name* folder, there are three subfolders: *notebooks* (code for project and experiment-specific analyses), *data* (data for project and experiment-specific analysis), and *results* (analysis results). The *data* and *results* subfolders will be automatically created by the notebooks. 
 
 **tests**: Code for testing the pipeline during development. Not needed for running the notebooks.
 
@@ -62,7 +70,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 **Before each analysis, please do the following:**
 1. git clone the repo to your system.
 2. Copy the *notebooks* folder into a *projects/project_name/experiment_name* folder. You can name the projects and experiments the way you want.
-3. Edit the analysis configuration sections (at the beginning) of the notebooks for project and experiment-specific analysis.
+3. Open the notebooks with Jupyter Lab and edit the analysis configuration sections (at the beginning) of the notebooks for project and experiment-specific analysis.
 4. Make sure that 3rd party softwares have been installed on your system and are in your path.
 5. Run the notebooks and have fun!
 
