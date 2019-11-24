@@ -24,7 +24,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 
 **The pipeline has the following two parts:**
 
-**[Part 1](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb). From fastq files to pA site read counts and UCSC genome browser tracks** 
+**[Part 1. From fastq files to pA site read counts and UCSC genome browser tracks](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb)** 
 1. Register analysis configurations for specific project/experiment
 2. Read sample annotation file
 3. Search, download, and merge fastq files 
@@ -38,7 +38,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 11. Generate summary statistics of 5' T-stretch lengths in both PASS and nonPASS reads 
 12. Create genome browser tracks for visualizing both PASS and nonPASS reads 
 
-**[Part 2](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb). pA site annotation** 
+**[Part 2. pA site annotation](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb)** 
 1. Register settings for this analysis. One experiment can be analysed with different settings. The results for each setting will be saved in different subfolders under the *results* directory. 
 2. Extend annotated 3'UTR regions to allow identification of new pA sites in previously poorly annotated 3'UTRs. 
 3. Assign pA clusters identified in Part 1 to genomic features such as extended 3'UTRs, introns, CDSs, and 5'UTRs.
