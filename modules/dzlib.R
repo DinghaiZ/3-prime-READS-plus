@@ -312,3 +312,131 @@ seeFastqPlot = function(fqlist, arrange=c(1,2,3,4,5,6,7,8), ...){
   }
 }
 
+
+#### Calculate exonic UTR sequence and length by parallel computing
+get_exonic_3UTR = function(df = pA.df, threeUTRs = threeUTRs, geno = "mm9", n_cpu = 8){
+  # df is a sub data frame of pA.df. It should contain the "strand", "chr", "pA_pos", 
+  # "cds_end", and "pAid" columns
+  # threeUTRs is a GRange object containing 3'UTR definition
+  # geno should be either "mm9" or "hg19" for now 
+  
+  ### Example of using this function:
+  # df = get_exonic_3UTR(df, threeUTRs, "mm9")
+  # Two columns (exonic_3UTR_seq, UTR_length) will be appended to df. May contain NA.
+  
+  library(foreach)
+  library(doParallel)
+  cl = makeCluster(n_cpu)
+  registerDoParallel(cl)
+  
+  if(geno=="mm9"){
+    require(BSgenome.Mmusculus.UCSC.mm9) 
+    geno = Mmusculus
+  }else if(geno=="hg19"){
+    require("BSgenome.Hsapiens.UCSC.hg19")
+    geno = Hsapiens
+  }
+  
+  require(GenomicRanges)
+  require(Biostrings)
+  
+  
+  pA_3UTR_df = df[df$region == "3UTR", ]
+  pA_3UTR_df$exonic_3UTR_seq = NA
+  pA_3UTR_df$UTR_length = NA
+  
+  pA_3UTR = GRanges(seqnames = pA_3UTR_df$chr, 
+                    ranges = IRanges(start = pA_3UTR_df$pA_pos, 
+                                     end = pA_3UTR_df$pA_pos, 
+                                     names = pA_3UTR_df$pAid),
+                    strand = pA_3UTR_df$strand,
+                    cds_start = pA_3UTR_df$cds_start,
+                    cds_end = pA_3UTR_df$cds_end
+                    )
+  
+  
+  olp = findOverlaps(pA_3UTR+3, threeUTRs)
+  
+  # Parallel computing
+  pA_3UTR_df[queryHits(olp), ]$exonic_3UTR_seq = foreach(i=1:length(olp), 
+                                                         .packages = "BSgenome",
+                                                         .combine = "c") %dopar%{
+                                                           # i = 8
+                                                           this_pA = pA_3UTR[queryHits(olp[i])]
+                                                           this_3UTR = threeUTRs[[subjectHits(olp[i])]]
+                                                           
+                                                           #if(length(strand(this_3UTR)@values) > 1 || is.na(this_pA$cds_end)){ # skip incorrect 3'UTR definitions
+                                                           if(length(strand(this_3UTR)@values) > 1){ # TODO: delete this line
+                                                            NA
+                                                           }else{
+                                                             if(strand(this_pA)@values == "+"){
+                                                               # Sometimes the there are multiple CDS ends in the last exon
+                                                               # for example, check chr1:193919462-193925703 on mm9 (UCSC genome browser)
+                                                               #this_3UTR = this_3UTR[start(this_3UTR) >= this_pA$cds_end] 
+                                                               if(length(this_3UTR) < 1){
+                                                                 NA
+                                                               }else{
+                                                                 # check if the overlap is true without moving the pA +/- 24 nt
+                                                                 pA_in_3UTR = this_pA %over% this_3UTR 
+
+                                                                 if(end(this_pA) >= min(start(this_3UTR))){
+                                                                   start(this_pA) = min(start(this_3UTR))
+                                                                 }else{ # to avoid negative width in some cases
+                                                                   end(this_pA) = min(start(this_3UTR))
+                                                                   start(this_pA) = min(start(this_3UTR))
+                                                                 }
+                                                                 
+                                                                 # if the pA is not exactly in the annotated 3'UTR, modify the 3'UTR annotation
+                                                                 if(!pA_in_3UTR){
+                                                                   # calculate the index of the 3'UTR exon that needs to be extended
+                                                                   exon_index = max(which(end(this_3UTR) - end(this_pA) < 0))
+                                                                   # extend the exon to the pA position
+                                                                   end(this_3UTR)[exon_index] = end(this_pA)
+                                                                 }
+                                                                 # update threeUTR 
+                                                                 # threeUTRs[[subjectHits(olp[i,])]] = this_3UTR 
+                                                                 this_3UTR = GenomicRanges::intersect(this_pA, this_3UTR)
+                                                                 as.character(unlist(getSeq(geno, this_3UTR)))
+                                                               }
+                                                             }else if(strand(this_pA)@values == "-"){
+                                                               # Sometimes the there are multiple CDS ends in the last exon: 
+                                                               # for example, check chr1:193919462-193925703 on mm9 (UCSC genome browser)
+                                                               #this_3UTR = this_3UTR[end(this_3UTR) <= this_pA$cds_end]
+                                                               if(length(this_3UTR) < 1){ # TODO: delete this line
+                                                                 NA
+                                                               }else{
+                                                                 # check if the overlap is true without moving the pA +/- 24 nt
+                                                                 pA_in_3UTR = this_pA %over% this_3UTR 
+                                                                 
+                                                                 #end(this_pA) = max(end(this_3UTR))
+                                                                 if(start(this_pA) <= max(end(this_3UTR))){
+                                                                   end(this_pA) = max(end(this_3UTR))
+                                                                 }else{ # to avoid negative width in some cases
+                                                                   start(this_pA) = max(end(this_3UTR))
+                                                                   end(this_pA) = max(end(this_3UTR))
+                                                                 }
+                                                                 # if the pA is not exactly in the annotated 3'UTR, modify the 3'UTR annotation
+                                                                 if(!pA_in_3UTR){
+                                                                   # calculate the index of the 3'UTR exon that needs to be extended
+                                                                   exon_index = min(which(start(this_3UTR) - start(this_pA) > 0))
+                                                                   # extend the exon to the pA position
+                                                                   start(this_3UTR)[exon_index] = start(this_pA)
+                                                                 }
+                                                                 # update threeUTR 
+                                                                 # threeUTRs[[subjectHits(olp[i,])]] = this_3UTR 
+                                                                 this_3UTR = GenomicRanges::intersect(this_pA, this_3UTR)
+                                                                 # when the 3'UTR has >1 exons, their sequences need to be re-ordered:
+                                                                 as.character(unlist(getSeq(geno, this_3UTR)[length(this_3UTR):1, ]))
+                                                               }
+                                                             }
+                                                           }
+                                                         }
+  
+  pA_3UTR_df[queryHits(olp), ]$UTR_length = nchar(pA_3UTR_df[queryHits(olp), ]$exonic_3UTR_seq)
+  
+  merge(df, pA_3UTR_df[, c("pAid", "exonic_3UTR_seq", "UTR_length")], all.x = T, sort = F)
+}
+## use the function like so:
+#df = get_exonic_3UTR(df = pA.df, threeUTRs, "mm9")
+
+
