@@ -39,16 +39,23 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 12. Create genome browser tracks for visualizing both PASS and nonPASS reads 
 
 **[Part 2. pA site annotation](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb)** (R kernel) 
-1. Register settings for this analysis. One experiment can be analysed with different settings. The results for each setting will be saved in different subfolders under the *results* directory. 
+1. Register settings for this analysis. One experiment can be analysed with different settings (parameters). The results for each setting will be saved in different folders under the *result_dir* directory. 
 2. Extend annotated 3'UTR regions to allow identification of new pA sites in previously poorly annotated 3'UTRs. 
 3. Assign pA clusters identified in Part 1 to genomic features such as extended 3'UTRs, introns, CDSs, and 5'UTRs.
 4. Resolve pA sites mapped to multiple genes.
 5. Map intergenic and intronic pA sites to Non-Coding RNAs (ncRNAs).
-6. Map intergenic pA sites to Upstream Antisense RNAs (uaRNAs).
-7. Map intergenic pA sites to mitochondria.
-8. Optionally resolve pA sites mapped to multiple genomic features of the same gene.
+6. Map remaining intergenic pA sites to Upstream Antisense RNAs (uaRNAs).
+7. Plot the fractions of pA sites and PASS reads mapped to mitochondria.
+8. Resolve pA sites mapped to multiple genomic features of the same gene.
 9. Plot distribution of pA sites and PASS reads in different genomic features of each sample.
-10. Calculate optimal Transcript Starting Sites (TSSs).
+10. Plot nucleotide profile near pA sites
+11. Calculate optimal Transcript Starting Sites (TSSs).
+12. Calculate CDS, intronic, 5'UTR, 3'UTR, and ncRNA features, such as size, GC content, and uORF.
+13. Identify subtypes of pA sites.
+14. Identify poly(A) signal (PAS).
+15. Calculate gene expression-related features, such as pA site level RPM, gene level RPM, and pA site usage.
+16. Filter out lowly expressed pAs and check corrrelation between samples
+17. Add gene symbols and Entrez gene ids to the data frame.
 
 
 ## What are in each folder?
