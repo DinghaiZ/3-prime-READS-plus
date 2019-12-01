@@ -12,7 +12,7 @@ findPotentialStartsAndStops = function(sequence){
   codons = c("ATG", "TAA", "TAG", "TGA")
   sequence = toupper(sequence)
   # Find the number of occurrences of each type of potential start or stop codon
-  for(i in 1:4){
+  for(i in 1:length(codons)){
     codon = codons[i]
     # Find all occurrences of codon "codon" in sequence "sequence"
     occurrences = matchPattern(codon, sequence)
@@ -44,7 +44,8 @@ findPotentialStartsAndStops = function(sequence){
 
 findORFsinSeq = function(sequence){
   require(Biostrings)
-  # Make vectors "positions" and "types" containing information on the positions of ATGs in the sequence:
+  # Make vectors "positions" and "types" containing information on the positions of ATGs 
+  # in the sequence:
   mylist = findPotentialStartsAndStops(sequence)
   positions = mylist[[1]]
   types = mylist[[2]]
@@ -213,7 +214,9 @@ seeFastq = function(fastq, batchsize=10000, klength=8){
   hstats[,1] = factor(hstats[,1], levels=unique(hstats[,1]), ordered=TRUE)
   
   ## Assemble results in list
-  return(list(fqstats=c(batchsize=batchsize, nReads=nReads, klength=klength), astats=astats, bstats=bstats, cstats=cstats, dstats=dstats, estats=estats, fstats=fstats, gstats=gstats, hstats=hstats))
+  return(list(fqstats=c(batchsize=batchsize, nReads=nReads, klength=klength), 
+              astats=astats, bstats=bstats, cstats=cstats, dstats=dstats, 
+              estats=estats, fstats=fstats, gstats=gstats, hstats=hstats))
 }
 
 
@@ -268,7 +271,8 @@ seeFastqPlot = function(fqlist, arrange=c(1,2,3,4,5,6,7,8), ...){
     f = ggplot(fstats, aes(Quality, Percent)) +
       geom_bar(fill="#0072B2", stat="identity") +
       theme(legend.position = "none", plot.title = element_text(size = 9)) +
-      ggtitle(paste(formatC(x[[1]][["fqstats"]][["batchsize"]], big.mark = ",", format="f", digits=0), "of", formatC(x[[1]][["fqstats"]][["nReads"]], big.mark = ",", format="f", digits=0), "Reads")) + 
+      ggtitle(paste(formatC(x[[1]][["fqstats"]][["batchsize"]], big.mark = ",", format="f", digits=0), "of", 
+                    formatC(x[[1]][["fqstats"]][["nReads"]], big.mark = ",", format="f", digits=0), "Reads")) + 
       scale_x_discrete(breaks=c(0, seq(0, length(unique(fstats$Quality)), by=5)[-1])) +
       xlab("Mean Quality") +
       ylab("% Reads")
@@ -284,8 +288,13 @@ seeFastqPlot = function(fqlist, arrange=c(1,2,3,4,5,6,7,8), ...){
     
     ## (H) Read occurrence distribution
     hstats = x[[1]][["hstats"]] 
-    myintervals = data.frame(labels=c("1", "2-10", "11-100", "101-1k", "1k-10k", ">10k"), lower=c(1,2,11,101,1001,10001), upper=c(2,11,101,1001,10001,Inf))
-    iv = sapply(seq(along=myintervals[,1]), function(x) sum(hstats[as.numeric(as.vector(hstats$nOccurrences)) >= myintervals[x,2] & as.numeric(as.vector(hstats$nOccurrences)) < myintervals[x,3], "Percent"]))
+    myintervals = data.frame(labels=c("1", "2-10", "11-100", "101-1k", "1k-10k", ">10k"), 
+                             lower=c(1,2,11,101,1001,10001), 
+                             upper=c(2,11,101,1001,10001,Inf))
+    iv = sapply(seq(along=myintervals[,1]),
+                function(x) sum(hstats[as.numeric(as.vector(hstats$nOccurrences)) >= 
+                                myintervals[x,2] & as.numeric(as.vector(hstats$nOccurrences)) 
+                                < myintervals[x,3], "Percent"]))
     hstats = data.frame(labels=myintervals[,1], Percent=iv)
     hstats[,1] = factor(hstats[,1], levels=unique(hstats[,1]), ordered=TRUE)
     h = ggplot(hstats, aes(labels, Percent)) +
@@ -313,130 +322,66 @@ seeFastqPlot = function(fqlist, arrange=c(1,2,3,4,5,6,7,8), ...){
 }
 
 
-#### Calculate exonic UTR sequence and length by parallel computing
-get_exonic_3UTR = function(df = pA.df, threeUTRs = threeUTRs, geno = "mm9", n_cpu = 8){
-  # df is a sub data frame of pA.df. It should contain the "strand", "chr", "pA_pos", 
-  # "cds_end", and "pAid" columns
-  # threeUTRs is a GRange object containing 3'UTR definition
-  # geno should be either "mm9" or "hg19" for now 
+create_3UTRs_from_pAs = function(pas){
+  #` Create 3'UTR GRanges
+  required_columns = c("region", "gene_symbol", "pAid", "cds_start", "cds_end")
+  if(!all(required_columns %in% names(pas))) {
+    stop(cat("The input dataframe must contain the following columns: ", 
+             paste(required_columns, collapse=", ")))
+  }
+
+  df = subset(pas, region == "3UTR", c("gene_symbol", "pAid", "cds_start", "cds_end"))
+
+  df$chr = sub("(chr.+)[+-]\\d+$", "\\1", df$pAid)
+  df$strand = sub("chr.+([+-])\\d+$", "\\1", df$pAid)
+  df$pos = as.numeric(sub("chr.+[+-](\\d+)$", "\\1", df$pAid))
+  df$start = as.numeric(ifelse(df$strand == "+", df$cds_end + 1, df$pos))
+  df$end = as.numeric(ifelse(df$strand == "+", df$pos, df$cds_start - 1))
+
+  df = df[df$end >= df$start, ]
+  df[, c("pos", "cds_end", "cds_start")] = NULL
+  df = df[complete.cases(df),]
   
-  ### Example of using this function:
-  # df = get_exonic_3UTR(df, threeUTRs, "mm9")
-  # Two columns (exonic_3UTR_seq, UTR_length) will be appended to df. May contain NA.
-  
-  library(foreach)
-  library(doParallel)
-  cl = makeCluster(n_cpu)
-  registerDoParallel(cl)
-  
-  if(geno=="mm9"){
-    require(BSgenome.Mmusculus.UCSC.mm9) 
-    geno = Mmusculus
-  }else if(geno=="hg19"){
-    require("BSgenome.Hsapiens.UCSC.hg19")
-    geno = Hsapiens
+  makeGRangesFromDataFrame(df, keep.extra.columns=T)
+}
+
+
+countAllMotif = function(pas, geno = "mm9", search_from = 0, search_len = 50, motif_width = 4){
+  # pas must contain "chr", "pA_pos", and "strand" columns
+  if(grepl("^mm", geno)){
+    require(BSgenome.Mmusculus.UCSC.mm9)
+  }else if(grepl("^hg", geno)){
+    require(BSgenome.Hsapiens.UCSC.hg19)
   }
   
   require(GenomicRanges)
   require(Biostrings)
   
-  
-  pA_3UTR_df = df[df$region == "3UTR", ]
-  pA_3UTR_df$exonic_3UTR_seq = NA
-  pA_3UTR_df$UTR_length = NA
-  
-  pA_3UTR = GRanges(seqnames = pA_3UTR_df$chr, 
-                    ranges = IRanges(start = pA_3UTR_df$pA_pos, 
-                                     end = pA_3UTR_df$pA_pos, 
-                                     names = pA_3UTR_df$pAid),
-                    strand = pA_3UTR_df$strand,
-                    cds_start = pA_3UTR_df$cds_start,
-                    cds_end = pA_3UTR_df$cds_end
-                    )
-  
-  
-  olp = findOverlaps(pA_3UTR+3, threeUTRs)
-  
-  # Parallel computing
-  pA_3UTR_df[queryHits(olp), ]$exonic_3UTR_seq = foreach(i=1:length(olp), 
-                                                         .packages = "BSgenome",
-                                                         .combine = "c") %dopar%{
-                                                           # i = 8
-                                                           this_pA = pA_3UTR[queryHits(olp[i])]
-                                                           this_3UTR = threeUTRs[[subjectHits(olp[i])]]
-                                                           
-                                                           #if(length(strand(this_3UTR)@values) > 1 || is.na(this_pA$cds_end)){ # skip incorrect 3'UTR definitions
-                                                           if(length(strand(this_3UTR)@values) > 1){ # TODO: delete this line
-                                                            NA
-                                                           }else{
-                                                             if(strand(this_pA)@values == "+"){
-                                                               # Sometimes the there are multiple CDS ends in the last exon
-                                                               # for example, check chr1:193919462-193925703 on mm9 (UCSC genome browser)
-                                                               #this_3UTR = this_3UTR[start(this_3UTR) >= this_pA$cds_end] 
-                                                               if(length(this_3UTR) < 1){
-                                                                 NA
-                                                               }else{
-                                                                 # check if the overlap is true without moving the pA +/- 24 nt
-                                                                 pA_in_3UTR = this_pA %over% this_3UTR 
+  upseq.gr = GRanges(seqnames = pas$chr, 
+                     ranges = IRanges(start = pas$pA_pos, end = pas$pA_pos),
+                     strand = pas$strand)
 
-                                                                 if(end(this_pA) >= min(start(this_3UTR))){
-                                                                   start(this_pA) = min(start(this_3UTR))
-                                                                 }else{ # to avoid negative width in some cases
-                                                                   end(this_pA) = min(start(this_3UTR))
-                                                                   start(this_pA) = min(start(this_3UTR))
-                                                                 }
-                                                                 
-                                                                 # if the pA is not exactly in the annotated 3'UTR, modify the 3'UTR annotation
-                                                                 if(!pA_in_3UTR){
-                                                                   # calculate the index of the 3'UTR exon that needs to be extended
-                                                                   exon_index = max(which(end(this_3UTR) - end(this_pA) < 0))
-                                                                   # extend the exon to the pA position
-                                                                   end(this_3UTR)[exon_index] = end(this_pA)
-                                                                 }
-                                                                 # update threeUTR 
-                                                                 # threeUTRs[[subjectHits(olp[i,])]] = this_3UTR 
-                                                                 this_3UTR = GenomicRanges::intersect(this_pA, this_3UTR)
-                                                                 as.character(unlist(getSeq(geno, this_3UTR)))
-                                                               }
-                                                             }else if(strand(this_pA)@values == "-"){
-                                                               # Sometimes the there are multiple CDS ends in the last exon: 
-                                                               # for example, check chr1:193919462-193925703 on mm9 (UCSC genome browser)
-                                                               #this_3UTR = this_3UTR[end(this_3UTR) <= this_pA$cds_end]
-                                                               if(length(this_3UTR) < 1){ # TODO: delete this line
-                                                                 NA
-                                                               }else{
-                                                                 # check if the overlap is true without moving the pA +/- 24 nt
-                                                                 pA_in_3UTR = this_pA %over% this_3UTR 
-                                                                 
-                                                                 #end(this_pA) = max(end(this_3UTR))
-                                                                 if(start(this_pA) <= max(end(this_3UTR))){
-                                                                   end(this_pA) = max(end(this_3UTR))
-                                                                 }else{ # to avoid negative width in some cases
-                                                                   start(this_pA) = max(end(this_3UTR))
-                                                                   end(this_pA) = max(end(this_3UTR))
-                                                                 }
-                                                                 # if the pA is not exactly in the annotated 3'UTR, modify the 3'UTR annotation
-                                                                 if(!pA_in_3UTR){
-                                                                   # calculate the index of the 3'UTR exon that needs to be extended
-                                                                   exon_index = min(which(start(this_3UTR) - start(this_pA) > 0))
-                                                                   # extend the exon to the pA position
-                                                                   start(this_3UTR)[exon_index] = start(this_pA)
-                                                                 }
-                                                                 # update threeUTR 
-                                                                 # threeUTRs[[subjectHits(olp[i,])]] = this_3UTR 
-                                                                 this_3UTR = GenomicRanges::intersect(this_pA, this_3UTR)
-                                                                 # when the 3'UTR has >1 exons, their sequences need to be re-ordered:
-                                                                 as.character(unlist(getSeq(geno, this_3UTR)[length(this_3UTR):1, ]))
-                                                               }
-                                                             }
-                                                           }
-                                                         }
+  start(upseq.gr[strand(upseq.gr) == "+", ]) =
+        start(upseq.gr[strand(upseq.gr) == "+", ]) - search_from - search_len + 1
+  end(upseq.gr[strand(upseq.gr) == "+", ]) =
+        end(upseq.gr[strand(upseq.gr) == "+", ]) - search_from + 1
+  end(upseq.gr[strand(upseq.gr) == "-", ]) =
+        end(upseq.gr[strand(upseq.gr) == "-", ]) + search_from + search_len - 1
+  start(upseq.gr[strand(upseq.gr) == "-", ]) =
+        start(upseq.gr[strand(upseq.gr) == "-", ]) + search_from - 1
   
-  pA_3UTR_df[queryHits(olp), ]$UTR_length = nchar(pA_3UTR_df[queryHits(olp), ]$exonic_3UTR_seq)
+  if(grepl("^mm", geno)){
+    upseq = getSeq(Mmusculus, upseq.gr)
+  }else if(grepl("^hg", geno)){
+    upseq = getSeq(Hsapiens, upseq.gr)
+  }
   
-  merge(df, pA_3UTR_df[, c("pAid", "exonic_3UTR_seq", "UTR_length")], all.x = T, sort = F)
+  motif_counts = oligonucleotideFrequency(upseq, width = motif_width, step=1,
+                                          as.prob=FALSE, as.array=F,
+                                          fast.moving.side="right", with.labels=TRUE,
+                                          simplify.as="matrix")
+  
+  motif_counts
 }
-## use the function like so:
-#df = get_exonic_3UTR(df = pA.df, threeUTRs, "mm9")
 
 
