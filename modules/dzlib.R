@@ -385,3 +385,44 @@ countAllMotif = function(pas, geno = "mm9", search_from = 0, search_len = 50, mo
 }
 
 
+plot_nucleotide_profile = function(pA, BSgeno = "BSgenome.Hsapiens.UCSC.hg19", window_size = 100){
+	#` Plot nucleotide profile near pAs
+	require(GenomicRanges)
+	require(BSgeno, character.only = T)
+
+	# Get genomic sequences
+	seq = getSeq(eval(parse(text=BSgeno)), pA + window_size)
+
+	# Remove sequences with "N"
+	seq = seq[!grepl("N", seq)]
+
+	# Computes the consensus matrix of a set of sequences
+	m = consensusMatrix(seq)[1:4,]
+
+	# Normalization
+	m = scale(m, center = F, scale = colSums(m))
+
+	# Column names indicates position relative to pA
+	colnames(m) = -window_size:window_size
+
+	# Write to csv, so that you can plot it in Excel
+	# write.csv(m, "nucleotide_profiles.csv")
+
+
+	# You can also plot using ggplot2:
+	require(tidyr)
+	require(dplyr)
+	require(ggplot2)
+	df = as.data.frame(t(m))
+	df$Position = as.numeric(rownames(df))
+	# png("Nucleotide_Profile.png", 600, 550)
+	p = df %>% 
+	  gather(key="Base", value = "Fraction", -Position) %>%
+	  ggplot(aes(x=Position, y=Fraction, color=Base)) +
+	  geom_line() 
+	# dev.off()
+
+	p
+} 
+
+
