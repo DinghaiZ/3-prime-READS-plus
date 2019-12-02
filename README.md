@@ -59,9 +59,9 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 
 **Part 3. Alternative polyadenylation (APA) analyais** (Coming soon.) 
 1. Identify genes with alternative polyadenylation. 
-2. Gene ontology (GO) analysis. 
-3. Cis-element analysis.
-4. Use machine learning to model alternative polyadenylation.
+2. Automatically design isoform-specific qPCR primers for validation of alternative polyadenylation
+3. Gene ontology (GO) analysis. 
+4. Use machine learning to identify features that may contribute to alternative polyadenylation
 
 ## What are in each folder?
 
