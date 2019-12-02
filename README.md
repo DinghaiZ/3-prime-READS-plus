@@ -57,6 +57,11 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 16. Filter out lowly expressed pAs and check corrrelation between samples
 17. Add gene symbols and Entrez gene ids to the data frame.
 
+**Part 3. Alternative polyadenylation (APA) analyais** (Coming soon.) 
+1. Identify genes with alternative polyadenylation. 
+2. Gene ontology (GO) analysis. 
+3. Cis-element analysis.
+4. Use machine learning to model alternative polyadenylation.
 
 ## What are in each folder?
 
