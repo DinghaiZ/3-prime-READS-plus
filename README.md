@@ -22,7 +22,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 </p>
 
 
-**The pipeline has the following two parts:**
+**The pipeline has the following three parts:**
 
 **[Part 1. From fastq files to pA sites](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb)** (Python kernel) 
 1. Register analysis configurations for specific project/experiment
