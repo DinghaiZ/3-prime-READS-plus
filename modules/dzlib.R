@@ -425,4 +425,711 @@ plot_nucleotide_profile = function(pA, BSgeno = "BSgenome.Hsapiens.UCSC.hg19", w
 	p
 } 
 
+row.fisher = function(rowdat){
+#` Fisher's exact test, accepting a row of 4 integers and returning a p value. 
+# Can be used like apply(x, 1, row.fisher), where x is a 4 column matrix
+  m = matrix(rowdat, nrow = 2, byrow=T)
+  fisher.test(m)$p.value
+}
+
+genewise.APA.fisher = function(gene.df){
+  #` gene.df is a dataframe with 4 columns containing integers
+  # all the cells in the 3rd/4th column contain the sum of the 1st/2nd column
+  if(nrow(gene.df) == 1 | any(is.na(gene.df))){
+    p_val = rep(1, nrow(gene.df))
+  }else{
+    gene.df[, 3] = gene.df[, 3] - gene.df[, 1]
+    gene.df[, 4] = gene.df[, 4] - gene.df[, 2]
+    if(any(gene.df < 0)){
+      p_val = rep(1, nrow(gene.df))
+    }else{
+      p_val = p.adjust(apply(gene.df, 1, row.fisher), "BH")
+    }
+  }
+  p_val
+}
+
+APA.fisher = function(dat){
+  #` dat must contain "gene_symbol", two "_count" an two corresponding "_gene" columns
+  # the "_gene" column contains total read counts for each gene
+  # split the data 
+  dat.lst = split(dat, dat$gene_symbol)
+  # work on one gene each time
+  p.vals = sapply(dat.lst, function(x) genewise.APA.fisher(x[, -1])) 
+  # recombind the data with results
+  p.vals = unlist(p.vals)
+}
+
+row.chi = function(rowdat){
+  require(MASS)
+  m = matrix(rowdat, nrow = 2, byrow=T)
+  if(any(is.na(m)) | any(m < 0)){
+    p_val = 1
+  }else{
+    chisq.test(m)$p.value
+  }
+}
+
+genewise.chi = function(dat){
+  #` dat is a dataframe with 4 columns containing integers
+  # all the cells in the 3rd/4th column contain the sum of the 1st/2nd column
+  dat[, 3] = dat[, 3] - dat[, 1]
+  dat[, 4] = dat[, 4] - dat[, 2]
+  
+  p_val = p.adjust(apply(dat, 1, row.chi), "BH")
+}
+
+
+#### for a gene with n pA isoforms, return n-1 combination of neighboring pA sites
+gene2neighorpAPairs = function(gene){
+  if(nrow(gene) > 1){
+    # set up the columns
+  gene_id = rep(gene$gene_id[1],nrow(gene)-1) 
+  gene_symbol = rep(gene$gene_symbol[1], nrow(gene)-1) 
+  comparedPAi = rep(NA, length(gene_id)) 
+  comparedPAj = rep(NA, length(gene_id)) 
+  
+  # Sort the pAs according to their position. 
+  # This ensure that the pAi is always the Prx pA compared to pAj
+  if (gene$strand[1] == "-"){
+    gene = gene[order(-1*gene$pA_pos), ]
+  }else if (gene$strand[1] == "+"){
+    gene = gene[order(gene$pA_pos), ]
+  }
+  
+  # create neighboring pA pairs
+  k = 1
+  for (i in 1:(nrow(gene) -1)){
+    comparedPAi[k] = gene$pAid[i]
+    comparedPAj[k] = gene$pAid[i+1]
+    k = k + 1
+  }
+  cbind(gene_id, gene_symbol, comparedPAi, comparedPAj)
+  }
+  
+}
+
+#### For a gene with n pA isoforms, return n*(n-1)/2 combination of pA sites
+gene2pAPairs = function(gene){ # pAid is needed!
+  if(nrow(gene) > 1){
+    # set up the columns
+  gene_id = rep(gene$gene_id[1], choose(nrow(gene), 2)) 
+  gene_symbol = rep(gene$gene_symbol[1], choose(nrow(gene), 2)) 
+  comparedPAi = rep(NA, length(gene_id)) 
+  comparedPAj = rep(NA, length(gene_id)) 
+  
+  # Sort the pAs according to their position. 
+  # This ensure that the pAi is always the Prx pA compared to pAj
+  if(gene$strand[1] == "-"){
+    gene = gene[order(-1*gene$pA_pos), ]
+  }else if(gene$strand[1] == "+"){
+    gene = gene[order(gene$pA_pos), ]
+  }
+  
+  # create pairwise combinations of pAs
+  k = 1
+  for (i in 1:(nrow(gene) -1)){
+    for (j in (i+1):nrow(gene)){ # compare all combinations of the APA isoforms
+      comparedPAi[k] = gene$pAid[i]
+      comparedPAj[k] = gene$pAid[j]
+      k = k + 1
+    }
+  }
+  cbind(gene_id, gene_symbol, comparedPAi, comparedPAj)
+  }
+  
+}
+
+#### pAs from the same gene will get paired, but no further calculations will be done
+pairwise.pAs = function(data, neighbor = F, toptwo = F, extra_cols = NULL, match_only=F){
+  # pAid is needed!
+  # extra_cols are column names other than those defined below that you want to compare between the isoforms
+  if(is.null(data$gene_id)){
+    data$gene_id = data$gene_symbol
+  }
+  # cols are column names used later for merging data frames
+  if(any(grep("^RAI", names(data)))){
+    cols = grep("^RAI", names(data), value = T)
+  }
+  if(any(grep("APA", names(data)))){
+    cols = grep("APA", names(data), value = T)
+  }
+  if(any(grep("^RPM", names(data)))){
+    cols = grep("^RPM", names(data), value = T)
+  }
+  if(any(grep("^num", names(data)))){
+    cols = grep("^num", names(data), value = T)
+  }
+  if(any(grep("_count$", names(data)))){
+    cols = grep("_count$", names(data), value = T)
+  }
+  cols = c(cols, extra_cols)
+  
+  # split the data frame according to gene ids
+  gene.lst = split(data, data$gene_id)
+  # only keep the genes with at least two APA isoforms
+  gene.lst = gene.lst[sapply(gene.lst, nrow) >= 2]
+  # compare read numbers between combinations of the isoforms in the two fractions
+  if(neighbor == F & toptwo == F){ 
+    cmp.lst = lapply(gene.lst, function(gene) gene2pAPairs(gene))
+  }else if(neighbor == F & toptwo == T){
+    cmp.lst = lapply(gene.lst, function(gene) gene2pAPairs(gene)) ## same as toptwo == F !!!!!!!!
+  }else if (neighbor == T & toptwo == F){
+    cmp.lst = lapply(gene.lst, function(gene) gene2neighorpAPairs(gene))
+  }else{
+    stop()
+  }
+  
+  # only keep non-empty lists
+  #cmp.lst = cmp.lst[sapply(cmp.lst, length) > 0] 
+  
+  # convert the list of df into one df
+  cmp = do.call("rbind", cmp.lst) #### matrix
+  cmp = as.data.frame(cmp, row.names = NULL, stringsAsFactors = FALSE)#"row.names = NULL" avoids duplicated row names; Without "stringsAsFactors = F", everything will be factors  
+  rownames(cmp) = NULL # I thought the row names are already deleted
+  
+  # get strand and pAid information from the original data
+  cmp = merge(cmp, data[,c("pAid", cols)], by.x = "comparedPAj", by.y = "pAid", sort = F)
+  cmp = merge(cmp, data[,c("pAid", cols)], by.x = "comparedPAi", by.y = "pAid", sort = F)
+  
+  names(cmp) = sub("\\.x$", "_Dis", names(cmp))
+  names(cmp) = sub("\\.y$", "_Prx", names(cmp))
+  names(cmp) = sub("comparedPAi", "Prx_pA", names(cmp))
+  names(cmp) = sub("comparedPAj", "Dis_pA", names(cmp))
+  
+  if(match_only == F){
+    if(any(grep("^RAI", names(data)))){
+      # calculate delta RAIs
+      for(string in sub("_Dis", "", grep("(RAI.*)_Dis", names(cmp), value = T, perl = T))){
+        Dis.col.name = paste0(string, "_Dis")
+        Prx.col.name = paste0(string, "_Prx")
+        cmp[, paste0("delt_", string)] = cmp[, Dis.col.name] - cmp[, Prx.col.name]
+      }
+    }
+    
+    if(any(grep("^RPM", names(data)))){
+      # calculate ratio of Dis to Prx pA RPMs
+      for(string in sub("_Dis", "", grep("(RPM.*)_Dis", names(cmp), value = T, perl = T))){
+        
+        Dis.col.name = paste0(string, "_Dis")
+        Prx.col.name = paste0(string, "_Prx")
+        cmp[, paste0("ratio_", sub("^RPM_", "", string))] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
+      }
+    }
+    
+    if(any(grep("^num", names(data)))){
+      # calculate ratio of Dis to Prx pA read numbers
+      for(string in sub("_Dis", "", grep("(num.*)_Dis", names(cmp), value = T, perl = T))){
+        
+        Dis.col.name = paste0(string, "_Dis")
+        Prx.col.name = paste0(string, "_Prx")
+        cmp[, paste0("ratio_", sub("^num_", "", string))] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
+      }
+      #cmp = cmp[, -grep("^num", names(cmp))]
+      #names(cmp) = sub("ratio_", "", names(cmp))
+    }
+    
+    if(any(grep("count$", names(data)))){
+      # calculate ratio of Dis to Prx pA read numbers
+      for(string in sub("_Dis", "", grep("(count.*)_Dis", names(cmp), value = T, perl = T))){
+        
+        Dis.col.name = paste0(string, "_Dis")
+        Prx.col.name = paste0(string, "_Prx")
+        cmp[, sub("counts?", "d2p_ratio", string)] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
+      }
+    }
+    
+    if(any(grep("^HL\\.", names(data)))){
+      # calculate ratio of Dis to Prx pA halflifes
+      for(string in sub("_Dis", "", grep("(^HL\\..*)_Dis", names(cmp), value = T, perl = T))){
+        
+        Dis.col.name = paste0(string, "_Dis")
+        Prx.col.name = paste0(string, "_Prx")
+        cmp[, paste0(string, "_ratio")] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
+        cmp[, paste0(string, "_difference")] = cmp[, Dis.col.name] - cmp[, Prx.col.name]
+      }
+    }
+  }
+  cmp
+}
+
+get.pA.pairs = function(data, cols = "UTR3_size", neighbor = F, toptwo = F, match_only=F){ 
+  # gene_id (or gene_symbol) and pAid are needed in input data!
+  # when toptwo is set to T, rpm values for each sample should also be provided to select the
+  # top two highly expressed isoforms
+  # cols are columns that you want to compare between the isoforms
+  names(data) =  sub("position", "pA_pos", names(data))
+  if(is.null(data$gene_id)){
+    data$gene_id = data$gene_symbol
+  }
+  
+  if(any(grep("_count$", names(data)))){
+    cols = c(grep("_count$", names(data), value = T), cols)
+  }
+  
+  #### for a gene with n pA isoforms, return 1 pair pA isoforms with highest read counts
+  if(toptwo){
+    if(any(grepl("rpm$", names(data)))){
+      # focus on rpm
+      tmp = data[, grep("pAid|gene_id|rpm$", names(data))]
+      # calculate total rpm for each pA isoform
+      tmp$total_rpm = rowSums(data[, grep("rpm$", names(data))])
+      # split the data frame according to gene ids
+      gene.lst = split(tmp, tmp$gene_id)
+      # only keep the genes with at least two APA isoforms
+      gene.lst = gene.lst[sapply(gene.lst, nrow) >= 2]
+      # reorder each dataframe that have > 2 pA isoforms
+      for(i in 1:length(gene.lst)){
+        if(nrow(gene.lst[[i]]) > 2){
+          gene.lst[[i]] = gene.lst[[i]][order(gene.lst[[i]]$total_rpm, decreasing = T)[1:2],]
+        }
+      }
+      # recombine the dataframes, and only keep the pAids
+      tmp = do.call("rbind", gene.lst)$pAid
+      # only keep the pA isoforms in tmp
+      data = subset(data, pAid %in% tmp)
+      rm(tmp)
+      # split the data frame again according to gene ids
+      gene.lst = split(data, data$gene_id)
+      # compare read numbers between combinations of the isoforms in the two fractions
+      cmp.lst = lapply(gene.lst, function(gene) gene2pAPairs(gene))
+    }else{
+      stop("To select top two isoforms, RPM columns should exist in the input.")
+    } 
+  }else{
+    # split the data frame according to gene ids
+    gene.lst = split(data, data$gene_id)
+    # only keep the genes with at least two APA isoforms
+    gene.lst = gene.lst[sapply(gene.lst, nrow) >= 2]
+    # compare read numbers between combinations of the isoforms in the two fractions
+    if(neighbor == F){ 
+      cmp.lst = lapply(gene.lst, function(gene) gene2pAPairs(gene))
+    }else if(neighbor == T){
+      cmp.lst = lapply(gene.lst, function(gene) gene2neighorpAPairs(gene))
+    }
+  }
+  
+  # convert the list of df into one df
+  cmp = do.call("rbind", cmp.lst) #### matrix
+  cmp = as.data.frame(cmp, row.names = NULL, stringsAsFactors = F)#"row.names = NULL" avoids duplicated row names; Without "stringsAsFactors = F", everything will be factors  
+  rownames(cmp) = NULL # I thought the row names are already deleted
+  
+  # get strand and pAid information from the original data
+  cmp = merge(cmp, subset(data, select = c("pAid", cols)), by.x = "comparedPAj", by.y = "pAid", sort = F)
+  cmp = merge(cmp, subset(data, select = c("pAid", cols)), by.x = "comparedPAi", by.y = "pAid", sort = F)
+  
+  # change column names
+  names(cmp) = sub("\\.x$", "_Dis", names(cmp))
+  names(cmp) = sub("\\.y$", "_Prx", names(cmp))
+  names(cmp) = sub("comparedPAi", "Prx_pA", names(cmp))
+  names(cmp) = sub("comparedPAj", "Dis_pA", names(cmp))
+  
+  # calculate Dis to Prx ratios within each sample
+  if(match_only == F){
+    if(any(grep("^RAI", names(data)))){
+      # calculate delta RAIs
+      for(string in sub("_Dis", "", grep("(RAI.*)_Dis", names(cmp), value = T, perl = T))){
+        Dis.col.name = paste0(string, "_Dis")
+        Prx.col.name = paste0(string, "_Prx")
+        cmp[, paste0("delt_", string)] = cmp[, Dis.col.name] - cmp[, Prx.col.name]
+      }
+    }
+    
+    if(any(grep("^RPM", names(data)))){
+      # calculate ratio of Dis to Prx pA RPMs
+      for(string in sub("_Dis", "", grep("(RPM.*)_Dis", names(cmp), value = T, perl = T))){
+        
+        Dis.col.name = paste0(string, "_Dis")
+        Prx.col.name = paste0(string, "_Prx")
+        cmp[, paste0("ratio_", sub("^RPM_", "", string))] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
+      }
+    }
+    
+    if(any(grep("^num", names(data)))){
+      # calculate ratio of Dis to Prx pA read numbers
+      for(string in sub("_Dis", "", grep("(num.*)_Dis", names(cmp), value = T, perl = T))){
+        
+        Dis.col.name = paste0(string, "_Dis")
+        Prx.col.name = paste0(string, "_Prx")
+        cmp[, paste0("ratio_", sub("^num_", "", string))] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
+      }
+      #cmp = cmp[, -grep("^num", names(cmp))]
+      #names(cmp) = sub("ratio_", "", names(cmp))
+    }
+    
+    if(any(grep("count$", names(data)))){
+      # calculate ratio of Dis to Prx pA read numbers
+      for(string in sub("_Dis", "", grep("(count.*)_Dis", names(cmp), value = T, perl = T))){
+        
+        Dis.col.name = paste0(string, "_Dis")
+        Prx.col.name = paste0(string, "_Prx")
+        cmp[, sub("counts?", "d2p_ratio", string)] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
+      }
+    }
+    
+    if(any(grep("^HL\\.", names(data)))){
+      # calculate ratio of Dis to Prx pA halflifes
+      for(string in sub("_Dis", "", grep("(^HL\\..*)_Dis", names(cmp), value = T, perl = T))){
+        
+        Dis.col.name = paste0(string, "_Dis")
+        Prx.col.name = paste0(string, "_Prx")
+        cmp[, paste0(string, "_ratio")] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
+        cmp[, paste0(string, "_difference")] = cmp[, Dis.col.name] - cmp[, Prx.col.name]
+      }
+    }
+  }
+  
+  # return
+  cmp = merge(cmp, unique(data[, c("gene_symbol", "description")]), all.x = T, sort=F)
+}
+
+get_red = function(data, cols = "UTR3_size", neighbor = F, toptwo = F, match_only=F){ 
+  # gene_id (or gene_symbol) and pAid are needed in input data!
+  # when toptwo is set to T, rpm values for each sample should also be provided to select the
+  # top two highly expressed isoforms
+  # cols are columns that you want to compare between the isoforms
+  names(data) =  sub("position", "pA_pos", names(data))
+  if(is.null(data$gene_id)){
+    data$gene_id = data$gene_symbol
+  }
+  
+  if(any(grep("_count$", names(data)))){
+    cols = c(grep("_count$", names(data), value = T), cols)
+  }
+  
+  # For a gene with n pA isoforms, return 1 pair pA isoforms with highest read counts
+  if(toptwo){
+    if(any(grepl("rpm$", names(data)))){
+      # focus on rpm
+      tmp = data[, grep("pAid|gene_id|rpm$", names(data))]
+      # calculate total rpm for each pA isoform
+      tmp$total_rpm = rowSums(data[, grep("rpm$", names(data))])
+      # split the data frame according to gene ids
+      gene.lst = split(tmp, tmp$gene_id)
+      # only keep the genes with at least two APA isoforms
+      gene.lst = gene.lst[sapply(gene.lst, nrow) >= 2]
+      # reorder each dataframe that have > 2 pA isoforms
+      for(i in 1:length(gene.lst)){
+        if(nrow(gene.lst[[i]]) > 2){
+          gene.lst[[i]] = gene.lst[[i]][order(gene.lst[[i]]$total_rpm, decreasing = T)[1:2],]
+        }
+      }
+      # recombine the dataframes, and only keep the pAids
+      tmp = do.call("rbind", gene.lst)$pAid
+      # only keep the pA isoforms in tmp
+      data = subset(data, pAid %in% tmp)
+      rm(tmp)
+      # split the data frame again according to gene ids
+      gene.lst = split(data, data$gene_id)
+      # compare read numbers between combinations of the isoforms in the two fractions
+      cmp.lst = lapply(gene.lst, function(gene) gene2pAPairs(gene))
+    }else{
+      stop("To select top two isoforms, RPM columns should exist in the input.")
+    } 
+  }else{
+    # split the data frame according to gene ids
+    gene.lst = split(data, data$gene_id)
+    # only keep the genes with at least two APA isoforms
+    gene.lst = gene.lst[sapply(gene.lst, nrow) >= 2]
+    # compare read numbers between combinations of the isoforms in the two fractions
+    if(neighbor == F){ 
+      cmp.lst = lapply(gene.lst, function(gene) gene2pAPairs(gene))
+    }else if(neighbor == T){
+      cmp.lst = lapply(gene.lst, function(gene) gene2neighorpAPairs(gene))
+    }
+  }
+  
+  # convert the list of df into one df
+  cmp = do.call("rbind", cmp.lst) #### matrix
+  cmp = as.data.frame(cmp, row.names = NULL, stringsAsFactors = F)
+  rownames(cmp) = NULL # I thought the row names are already deleted
+  
+  # get strand and pAid information from the original data
+  cmp = merge(cmp, subset(data, select = c("pAid", cols)), by.x = "comparedPAj", by.y = "pAid", sort = F)
+  cmp = merge(cmp, subset(data, select = c("pAid", cols)), by.x = "comparedPAi", by.y = "pAid", sort = F)
+  
+  # change column names
+  names(cmp) = sub("\\.x$", "_Dis", names(cmp))
+  names(cmp) = sub("\\.y$", "_Prx", names(cmp))
+  names(cmp) = sub("comparedPAi", "Prx_pA", names(cmp))
+  names(cmp) = sub("comparedPAj", "Dis_pA", names(cmp))
+  
+  # calculate Dis to Prx ratios within each sample
+  if(match_only == F){
+    if(any(grep("^RPM", names(data)))){
+      # calculate ratio of Dis to Prx pA RPMs
+      for(string in sub("_Dis", "", grep("(RPM.*)_Dis", names(cmp), value = T, perl = T))){
+        Dis.col.name = paste0(string, "_Dis")
+        Prx.col.name = paste0(string, "_Prx")
+        cmp[, paste0("ratio_", sub("^RPM_", "", string))] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
+      }
+    }
+    if(any(grep("count$", names(data)))){
+      # calculate ratio of Dis to Prx pA read numbers
+      for(string in sub("_Dis", "", grep("(count.*)_Dis", names(cmp), value = T, perl = T))){
+        Dis.col.name = paste0(string, "_Dis")
+        Prx.col.name = paste0(string, "_Prx")
+        cmp[, sub("counts?", "d2p_ratio", string)] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
+      }
+    }
+  }
+  
+  # return
+  cmp = merge(cmp, unique(data[, c("gene_symbol", "description")]), all.x = T, sort=F)
+}
+
+
+#### Convert pAid into a dataframe containing chr, pA_pos, and strand info
+pAid2pos = function(pairwise.pas){
+  pAid.i = pairwise.pas$Prx_pA
+  pAid.j = pairwise.pas$Dis_pA
+  pA.pos.df = as.data.frame(do.call(rbind, strsplit(pAid.i, "[+-]")), 
+                            stringsAsFactors = F)
+  #pos.i.string = "Prx_pA_pos"
+  names(pA.pos.df) = c("chr", "Prx_pA_pos")
+  pA.pos.df$chr = as.character(pA.pos.df$chr)
+  pA.pos.df$Prx_pA_pos = as.integer(pA.pos.df$Prx_pA_pos)
+  pA.pos.df$strand = as.vector(sub(".*?([+-])\\d*", "\\1", pAid.i, perl = T))
+  
+  pA.pos.df$Dis_pA_pos = as.data.frame(do.call(rbind, strsplit(pAid.j, "[+-]")), 
+                                          stringsAsFactors = F)[,2]
+  pA.pos.df$Dis_pA_pos = as.integer(pA.pos.df$Dis_pA_pos)
+  
+  cbind(pA.pos.df, pairwise.pas)
+}
+
+#### If the input is just pas (with only one pAid column)
+split.pAid.in.pas = function(pas){
+  pA.pos.df = as.data.frame(do.call(rbind, strsplit(pas$pAid, "[+-]")), 
+                            stringsAsFactors = F)
+  names(pA.pos.df) = c("chr", "pA_pos")
+  pA.pos.df$chr = as.character(pA.pos.df$chr)
+  pA.pos.df$pA_pos = as.integer(pA.pos.df$pA_pos)
+  pA.pos.df$strand = as.vector(sub(".*?([+-])\\d*", "\\1", pas$pAid, perl = T))
+  cbind(pA.pos.df, pas)
+}
+
+#### Match aUTRs with slightly different pA sites in two data frames allowing distance of "radius" nt
+match.pA.pair = function(df1, df2, radius = 12, keep = "intersect", rm_dup_col = T){
+  # "keep" can be one of "union", "intersect", "df1", "df2")
+  # "rm_dup_col": should duplicated columns be removed?
+  
+  if(!keep %in% c("union", "intersect", "df1", "df2")){
+    stop('"keep" can only be one of "union", "intersect", "df1", and "df2"')
+  }
+  
+  # calculate chr, strand, and position
+  if("Prx_pA" %in% names(df1) & "Dis_pA" %in% names(df1)){
+    df1 = pAid2pos(df1)
+  }
+  if("Prx_pA" %in% names(df2) & "Dis_pA" %in% names(df2)){
+    df2 = pAid2pos(df2)
+  }
+  
+  # calculate pA position in case it is not provided (for backward compatibility, when pAid is not supplied)
+  if(!"Prx_pA_pos" %in% names(df1)){
+    df1$Prx_pA_pos = as.numeric(sub("chr.+[-+]", "", df1$Prx_pA))
+  }
+  if(!"Dis_pA_pos" %in% names(df1)){
+    df1$Dis_pA_pos = as.numeric(sub("chr.+[-+]", "", df1$Dis_pA))
+  }
+  if(!"Prx_pA_pos" %in% names(df2)){
+    df2$Prx_pA_pos = as.numeric(sub("chr.+[-+]", "", df2$Prx_pA))
+  }
+  if(!"Dis_pA_pos" %in% names(df2)){
+    df2$Dis_pA_pos = as.numeric(sub("chr.+[-+]", "", df2$Dis_pA))
+  }
+  
+  # split genes
+  if("gene_symbol" %in% names(df1) & "gene_symbol" %in% names(df2)){
+    # only keep common genes
+    df1_intersect = subset(df1, toupper(gene_symbol) %in% toupper(df2$gene_symbol))
+    df2_intersect = subset(df2, toupper(gene_symbol) %in% toupper(df1$gene_symbol))
+    # order the dataframe so that the list will be in the same order
+    df1_intersect = df1_intersect[order(df1_intersect$gene_symbol),]
+    df2_intersect = df2_intersect[order(df2_intersect$gene_symbol),]
+    # split into individual genes for comparison
+    df1_intersect.lst = split(df1_intersect, df1_intersect$gene_symbol)
+    df2_intersect.lst = split(df2_intersect, df2_intersect$gene_symbol)
+  }else if("gene_id" %in% names(df1) & "gene_id" %in% names(df2)){
+    # only keep common genes
+    df1$gene_id = as.numeric(df1$gene_id)
+    df2$gene_id = as.numeric(df2$gene_id)
+    df1_intersect = subset(df1, gene_id %in% df2$gene_id)
+    df2_intersect = subset(df2, gene_id %in% df1$gene_id)
+    # order the dataframe so that the list will be in the same order
+    df1_intersect = df1_intersect[order(as.numeric(df1_intersect$gene_id)),]
+    df2_intersect = df2_intersect[order(as.numeric(df2_intersect$gene_id)),]
+    # split into individual genes for comparison
+    df1_intersect.lst = split(df1_intersect, df1_intersect$gene_id)
+    df2_intersect.lst = split(df2_intersect, df2_intersect$gene_id)
+  }
+  
+  # determine if the pA pairs are the same, gene by gene
+  df = data.frame()
+  unmatched_genes = vector()
+  for(i in 1:length(df1_intersect.lst)){
+    unmatched = T
+    for(j in 1:nrow(df1_intersect.lst[[i]])){
+      for(k in 1:nrow(df2_intersect.lst[[i]])){
+        if(abs(df1_intersect.lst[[i]][j,"Prx_pA_pos"] - df2_intersect.lst[[i]][k, "Prx_pA_pos"]) <= radius*2 &
+           abs(df1_intersect.lst[[i]][j,"Dis_pA_pos"] - df2_intersect.lst[[i]][k,"Dis_pA_pos"]) <= radius*2){
+          row = cbind(df1_intersect.lst[[i]][j,], df2_intersect.lst[[i]][k,])
+          df = rbind(df, row)
+          
+          unmatched = F
+          # next
+        }
+      }
+    }
+    if(unmatched){
+      unmatched_genes = c(unmatched_genes, df1_intersect[i, "gene_symbol"])
+    }
+  }
+  
+  if(keep == "union"){
+    df1_unique = subset(df1, !toupper(gene_symbol) %in% toupper(df2$gene_symbol))
+    if(nrow(df1_unique) > 0){
+      df2_empty = matrix(NA, ncol = ncol(df2), nrow = nrow(df1_unique))
+      colnames(df2_empty) = names(df2)
+      if(length(unmatched_genes)){
+        df2_empty = rbind(df2_empty, subset(df2, gene_symbol %in% unmatched_genes))
+      }
+      colnames(df2_empty) = names(df)[-(1:ncol(df1))]
+      df = rbind(df, cbind(df1_unique, df2_empty))
+    }
+    df2_unique = subset(df2, !toupper(gene_symbol) %in% toupper(df1$gene_symbol))
+    if(nrow(df2_unique) > 0){
+      df1_empty = matrix(NA, ncol = ncol(df1), nrow = nrow(df2_unique))
+      colnames(df1_empty) = names(df1)
+      if(length(unmatched_genes)){
+        df1_empty = rbind(df1_empty, subset(df1, gene_symbol %in% unmatched_genes))
+      }
+      colnames(df1_empty) = names(df)[1:ncol(df1)]
+      df = rbind(df, cbind(df1_empty, df2_unique))
+    }
+  }else if(keep == "df1"){
+    df1_unique = subset(df1, !toupper(gene_symbol) %in% toupper(df2$gene_symbol))
+    if(nrow(df1_unique) > 0){
+      df2_empty = matrix(NA, ncol = ncol(df2), nrow = nrow(df1_unique))
+      colnames(df2_empty) = names(df2)
+      if(length(unmatched_genes)){
+        df2_empty = rbind(df2_empty, subset(df2, gene_symbol %in% unmatched_genes))
+      }
+      colnames(df2_empty) = names(df)[-(1:ncol(df1))]
+      df = rbind(df, cbind(df1_unique, df2_empty))
+    }
+  }else if(keep == "df2"){
+    df2_unique = subset(df2, !toupper(gene_symbol) %in% toupper(df1$gene_symbol))
+    if(nrow(df2_unique) > 0){
+      df1_empty = matrix(NA, ncol = ncol(df1), nrow = nrow(df2_unique))
+      colnames(df1_empty) = names(df1)
+      if(length(unmatched_genes)){
+        df1_empty = rbind(df1_empty, subset(df1, gene_symbol %in% unmatched_genes))
+      }
+      colnames(df1_empty) = names(df)[1:ncol(df1)]
+      df = rbind(df, cbind(df1_empty, df2_unique))
+    }
+  }
+  
+  # Remove duplicated columns
+  duplicated_columns = intersect(names(df2), names(df1))
+  names(df) = make.unique(names(df))
+  if(rm_dup_col){
+    for(duplicated_column in duplicated_columns){
+      df[, duplicated_column] = ifelse(is.na(df[, duplicated_column]), df[, paste0(duplicated_column, ".1")], df[, duplicated_column])
+      df[, paste0(duplicated_column, ".1")] = NULL
+    }
+  }
+  df
+}
+match.pA.pairs = match.pA.pair
+
+
+#### Match pA sites in two data frames, allowing distance of "radius" nt
+match.pA = function(df1, df2, radius = 12, left_join=T, copy_right_columns = T){
+  # df1 and df2 are data frames containing the pAid (chr1-196924906) column.
+  # pA sites whose genomic positions <= 2*radius bp will be considered as the same pA site
+  # all rows and columns of df1 will be preserved
+  df1$chr = NULL
+  df1$strand = NULL
+  df1$pA_pos = NULL
+  df1 = split.pAid.in.pas(as.data.frame(df1))
+  df2$chr = NULL
+  df2$strand = NULL
+  df2$pA_pos = NULL
+  df2 = split.pAid.in.pas(as.data.frame(df2))
+  
+  require(GenomicRanges)
+  df1.gr = GRanges(seqnames = df1$chr,
+                   strand = df1$strand, 
+                   ranges = IRanges(start = df1$pA_pos - radius, end = df1$pA_pos + radius),
+                   df1.pAid = df1$pAid)
+  
+  df2.gr = GRanges(seqnames = df2$chr,
+                   strand = df2$strand, 
+                   ranges = IRanges(start = df2$pA_pos - radius, end = df2$pA_pos + radius),
+                   df2.pAid = df2$pAid)
+  if(left_join){
+    df2.gr = df2.gr[df2.gr %over% df1.gr]
+  }
+  # make a data frame for matching rows
+  olp = findOverlaps(df1.gr, df2.gr)
+  # some pAs in one gr can match >= 1 pAs in another gr!!!!!!!
+  #   sum(duplicated(queryHits(olp)))
+  #   sum(duplicated(subjectHits(olp)))
+  
+  matched.pA = cbind(df1.pAid = df1.gr$df1.pAid[queryHits(olp)], 
+                     df2.pAid = df2.gr$df2.pAid[subjectHits(olp)])
+  
+  data.cmn = merge(matched.pA, df1, by.y = "pAid", by.x = "df1.pAid",  
+                   sort = F, stringAsFactors = F, all=F) ## all = F is important to remove unmatched pAids
+  data.cmn = merge(data.cmn, df2, by.x = "df2.pAid", by.y = "pAid", 
+                   sort = F, stringAsFactors = F, all=F) ## all = F is important to remove unmatched pAids
+  
+  
+  # clean up the dataframe
+  # change colnames so that they can be processed like other common columns
+  names(data.cmn)[names(data.cmn) == "df1.pAid"] = "pAid.x"
+  names(data.cmn)[names(data.cmn) == "pAid"] = "pAid.y"
+  #data.cmn = apply(data.cmn, 2, as.vector) # the "pAd.x" column is factor
+  data.cmn[, "pAid.x"] = as.vector(data.cmn[, "pAid.x"])
+  # copy info
+  if(copy_right_columns == T){
+    for (col in colnames(df1)){
+      if (col %in% colnames(df2)){
+        colx = paste0(col, ".x")
+        coly = paste0(col, ".y")
+        #data.cmn[, colx][is.na(data.cmn[, colx])] = data.cmn[, coly][is.na(data.cmn[, colx])]
+        #print(data.cmn[is.na(data.cmn[, colx]), colx])
+        #print(as.vector(data.cmn[is.na(data.cmn[, colx]), coly]))
+        data.cmn[is.na(data.cmn[, colx]), colx] = as.vector(data.cmn[is.na(data.cmn[, colx]), coly])
+      }
+    }
+  }
+  
+  ### Some pAs in df1 match to >=1 pAs in df2. Only keep the one closest to the pA in df1
+  data.dup = data.cmn[data.cmn$pAid %in% matched.pA[,1][duplicated(matched.pA[,1])], ]
+  data.dup$pA_distance = abs(data.dup$pA_pos.x - data.dup$pA_pos.y)
+  data.dup = split(data.dup, data.dup$pAid.x)
+  data.dup = lapply(data.dup, function(gene) gene[which.min(gene$pA_distance), ])
+  data.dup = as.data.frame(do.call(rbind, data.dup))
+  data.dup$pA_distance = NULL
+  data.cmn = rbind(data.cmn[!data.cmn$pAid %in% matched.pA[,1][duplicated(matched.pA[,1])], ], data.dup)
+  
+  # remove .y columns 
+  data.cmn = data.cmn[, -grep("\\.y", names(data.cmn))]
+  names(data.cmn) = sub("\\.x", "", names(data.cmn))
+  
+  ### combine data for pAs in df1 that match to >=1 pAs in df2 ??
+  ### Not necessary for now
+  
+  # return
+  data.cmn
+}
+match.pAs = match.pA
+match.pAs.2 = match.pA  
+
+
+
 
