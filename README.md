@@ -45,23 +45,25 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 4. Resolve pA sites mapped to multiple genes.
 5. Map intergenic and intronic pA sites to Non-Coding RNAs (ncRNAs).
 6. Map remaining intergenic pA sites to Upstream Antisense RNAs (uaRNAs).
-7. Plot the fractions of pA sites and PASS reads mapped to mitochondria.
-8. Resolve pA sites mapped to multiple genomic features of the same gene.
+7. Plot the fractions of pA sites and PASS reads mapped to the mitochondria genome.
+8. Resolve pA sites mapped to multiple genomic features of alternatively spliced gene.
 9. Plot distribution of pA sites and PASS reads in different genomic features of each sample.
-10. Plot nucleotide profile near pA sites
+10. Plot nucleotide profile near pA sites mapped to different genomic regions.
 11. Calculate optimal Transcript Starting Sites (TSSs).
-12. Calculate CDS, intronic, 5'UTR, 3'UTR, and ncRNA features, such as size, GC content, and uORF.
+12. Calculate CDS, intronic, 5'UTR, 3'UTR, and ncRNA features (such as size, GC content, and uORF) and check their relationships.
 13. Identify subtypes of pA sites.
 14. Identify poly(A) signal (PAS).
-15. Calculate gene expression-related features, such as pA site level RPM, gene level RPM, and pA site usage.
-16. Filter out lowly expressed pAs and check corrrelation between samples
-17. Add gene symbols and Entrez gene ids to the data frame.
+15. Check if different subtypes of pA sites tend to use different poly(A) signal (PAS).
+16. Add gene symbols and Entrez gene ids.
+17. Calculate gene expression-related features, such as pA site level RPM, gene level RPM, and pA site usage.
+18. Filter out lowly expressed 3'UTR pAs.
+19. Calculate number of pA sites per gene and its relationship with 3'UTR and CDS GC%.
+20. Cluster samples using corrrelation between RPMs.
 
-**Part 3. Alternative polyadenylation (APA) analyais** (Coming soon.) 
-1. Identify genes with alternative polyadenylation. 
-2. Automatically design isoform-specific qPCR primers for validation of alternative polyadenylation
-3. Gene ontology (GO) analysis. 
-4. Use machine learning to identify features that may contribute to alternative polyadenylation
+**Part 3. Machine Learning** (Coming soon.) 
+1. Use machine learning to identify features that may contribute to expression regulation
+2. Use machine learning to identify features that may contribute to alternative polyadenylation
+
 
 ## What are in each folder?
 
