@@ -7,11 +7,8 @@ import numpy as np
 
 def mfe_sliding_window(seq, window_size=100, step_size=50):
   seq_len = len(seq)
-  if seq_len <= step_size:
+  if seq_len < window_size:
     return (np.nan,)*4
-  elif seq_len <= window_size:
-    mfe = RNA.fold(seq)[1] * window_size / seq_len
-    return (mfe,)*4
   else:
     # Get window start positions
     window_start_positions = list(range(0, seq_len - window_size + 1, step_size))
