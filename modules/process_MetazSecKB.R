@@ -81,6 +81,7 @@ df = merge(df, result, by.x = "uniprot_id", by.y = "uniprotswissprot") %>%
   mutate(Cytoskeleton = grepl("[Cc]ytoskeleton",localizations)
                       &!grepl("[Mm]embrane",localizations)
                       &!grepl("Secreted",localizations)) %>%
+  mutate(GPI_Anchored = grepl("GPI anchored", localizations)) %>%
   mutate(Secreted = grepl("Secreted \\(curated\\)", localizations)) %>%
   mutate(Secreted_likely = grepl("Secreted \\(likely\\)", localizations)) %>%
   mutate(Secreted_highlylikely = grepl("Secreted \\(highly likely\\)", localizations)) %>%
