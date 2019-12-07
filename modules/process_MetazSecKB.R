@@ -69,17 +69,22 @@ df = merge(df, result, by.x = "uniprot_id", by.y = "uniprotswissprot") %>%
   mutate(ER = grepl("ER", localizations)) %>%
   mutate(Golgi = grepl("Golgi", localizations)) %>%
   mutate(Membrane = grepl("[Mm]embrane", localizations)) %>%
-  mutate(Nucleus = grepl("Nucleus", localizations)) %>%
-  mutate(Cytoplasm = grepl("Cytoplasm", localizations)) %>%
-  mutate(Mitochondria = grepl("Mitochondria", localizations)) %>%
-  mutate(Lysosome = grepl("Lysosome", localizations)) %>%
-  mutate(Peroxisome = grepl("Peroxisome", localizations)) %>%
-  mutate(Cytoskeleton = grepl("Cytoskeleton", localizations)) %>%
+  mutate(Nucleus = grepl("[Nn]ucleus",localizations)
+                 &!grepl("[Mm]embrane",localizations)
+                 &!grepl("Secreted",localizations)) %>%
+  mutate(Cytoplasm = grepl("[Cc]ytoplasm",localizations)
+                   &!grepl("[Mm]embrane",localizations)
+                   &!grepl("Secreted",localizations)) %>%
+  mutate(Mitochondria = grepl("[Mm]itochondria", localizations)) %>%
+  mutate(Lysosome = grepl("[Ll]ysosome", localizations)) %>%
+  mutate(Peroxisome = grepl("[Pp]eroxisome", localizations)) %>%
+  mutate(Cytoskeleton = grepl("[Cc]ytoskeleton",localizations)
+                      &!grepl("[Mm]embrane",localizations)
+                      &!grepl("Secreted",localizations)) %>%
   mutate(Secreted = grepl("Secreted \\(curated\\)", localizations)) %>%
   mutate(Secreted_likely = grepl("Secreted \\(likely\\)", localizations)) %>%
   mutate(Secreted_highlylikely = grepl("Secreted \\(highly likely\\)", localizations)) %>%
-  mutate(Secreted_weaklylikely = grepl("Secreted \\(weakly likely\\)", localizations)) %>%
-  dplyr::select(-localizations)
+  mutate(Secreted_weaklylikely = grepl("Secreted \\(weakly likely\\)", localizations)) 
 
 df[df == TRUE] = 1
 df[df == FALSE] = 0
