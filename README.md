@@ -38,7 +38,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 11. Generate summary statistics of 5' T-stretch lengths in both PASS and nonPASS reads 
 12. Create genome browser tracks for visualizing both PASS reads 
 
-**[Part 2. pA site annotation](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb)** (R kernel) 
+**[Part 2. pA site annotation and feature calculation](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-2.ipynb)** (R kernel) 
 1. Register settings for this analysis. One experiment can be analysed with different settings (parameters). The results for each setting will be saved in different folders under the *result_dir* directory. 
 2. Extend annotated 3'UTR regions to allow identification of new pA sites in previously poorly annotated 3'UTRs. 
 3. Assign pA clusters identified in Part 1 to genomic features such as extended 3'UTRs, introns, CDSs, and 5'UTRs.
