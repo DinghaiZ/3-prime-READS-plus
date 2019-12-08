@@ -54,11 +54,15 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 13. Identify subtypes of pA sites.
 14. Identify poly(A) signal (PAS).
 15. Check if different subtypes of pA sites tend to use different poly(A) signal (PAS).
-16. Add gene symbols and Entrez gene ids.
+16. Get symbols and Entrez gene ids.
 17. Calculate gene expression-related features, such as pA site level RPM, gene level RPM, and pA site usage.
 18. Filter out lowly expressed 3'UTR pAs.
-19. Calculate number of pA sites per gene and its relationship with 3'UTR and CDS GC%.
-20. Cluster samples using corrrelation between RPMs.
+19. Number of pA sites per gene and its relationship with 3'UTR and CDS GC%.
+20. Minimum Folding Energy (MFE) of exonic 3'UTR sequences.
+21. Features of mRNAs encoding differentially localized proteins.
+22. Calculate RBP binding scores using RNAcompete and SELEX data downloaded from ATtRACT.
+23. Annotate Alu and IRAlu elements (human samples only).
+24. Use DESeq2 to transform data and calcualte pA site fold change (FC).
 
 **Part 3. Machine Learning** (Coming soon.) 
 1. Use machine learning to identify features that may contribute to expression regulation
