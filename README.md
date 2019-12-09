@@ -69,7 +69,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 2. Deep neurual networks
 
 
-## What are in each folder?
+## What is in each folder?
 
 **[modules](https://github.com/DinghaiZ/3-prime-READS-plus/tree/master/modules)**: Definitions of functions and classes used in the pipeline.
 
