@@ -64,9 +64,9 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 23. Annotate Alu and IRAlu elements (human samples only).
 24. Use DESeq2 to transform data and calcualte pA site fold change (FC).
 
-**Part 3. Machine Learning** (Coming soon.) 
-1. Use machine learning to identify features that may contribute to expression regulation
-2. Use machine learning to identify features that may contribute to alternative polyadenylation
+**Part 3. Use machine learning to identify features that may significantly influence experiment outcome** (Coming soon.) 
+1. Random forest models
+2. Deep neurual networks
 
 
 ## What are in each folder?
