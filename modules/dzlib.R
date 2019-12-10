@@ -5,6 +5,24 @@ require(dplyr)
 require(ggplot2)
 theme_set(theme_bw(base_size = 15) + theme(plot.title = element_text(hjust = 0.5))) 
 
+rename_grl = function(grl, old_key = "ACCNUM", new_key = "SYMBOL"){
+    # A function to rename GRanges in a GRangeList.
+    
+    # Convert a GRangeList to a GRanges for faster calculation
+    gr = unlist(grl)
+
+    # Convert the accession numbers of the genes into gene symbols
+    names(gr) = mapIds(org.db, keys = names(gr), keytype = old_key, column = new_key)
+    
+    # Rebuild GRanges by gene symbol 
+    grl = split(gr, names(gr))   
+
+    # Collapse features
+    grl = reduce(grl)
+    
+    # Remove GRanges that are on two strands
+    grl[sapply(grl, function(x) length(strand(x)@values) == 1)]
+}
 
 findPotentialStartsAndStops = function(sequence){
   library("Biostrings")
