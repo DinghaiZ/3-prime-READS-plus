@@ -67,7 +67,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 **[Part 3. Use machine learning to identify features that may significantly influence experimental outcomes](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-3.ipynb)** (Python kernel) 
 1. Prepare data
 2. Select the most promising machine learning models using cross validation
-3. Fine tune hyper parameters of the support vector machine model
+3. Fine tune hyper parameters of the support vector machine (SVM) model
 4. Fine tune hyper parameters of the gradient boosting tree (XGboost) model
 5. Model interpretation
 
