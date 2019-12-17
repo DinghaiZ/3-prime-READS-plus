@@ -1,5 +1,5 @@
 # 3-prime-READS-plus
-## From 3' end RNA-seq (3'READS+) data to machine learning models to biological insights 
+## From 3' end RNA-seq data to machine learning models to biological insights 
 
 About 70% of mRNA genes in eukaryotes contain multiple cleavage and polyadenylation sites (PAS), resulting in alternative cleavage and polyadenylation (APA) isoforms with different coding sequences and/or variable 3′ untranslated regions (3′UTRs). [3'READS+](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5029459/) is a 3' end RNA-seq protocol developed in Dr. Bin Tian's lab at Rutgers University for accurate identification of PAS in the genome, even in A-rich regions:
 
