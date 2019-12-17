@@ -1,5 +1,5 @@
 # 3-prime-READS-plus
-## A Parallel Computation Pipeline for Analyzing 3' End RNA-seq (3'READS+) Data 
+## From 3' end RNA-seq (3'READS+) data to machine learning models to biological insights 
 
 About 70% of mRNA genes in eukaryotes contain multiple cleavage and polyadenylation sites (PAS), resulting in alternative cleavage and polyadenylation (APA) isoforms with different coding sequences and/or variable 3′ untranslated regions (3′UTRs). [3'READS+](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5029459/) is a 3' end RNA-seq protocol developed in Dr. Bin Tian's lab at Rutgers University for accurate identification of PAS in the genome, even in A-rich regions:
 
@@ -7,22 +7,7 @@ About 70% of mRNA genes in eukaryotes contain multiple cleavage and polyadenylat
   <img src="images/flowchart.jpg" width="400" height="400">
 </p>
 
-Steming from incomplete digestion of the poly(A) tail by RNaseH, the T-streches at the 5' end of the reads can be used to identify cleavage and polyadenylation sites in the genome, because these T-streches cannot be aligned with the genomic sequence:
-
-<p align="center">
-  <img src="images/read.jpg" width="300" height="180" class="center">
-</p>
-
-However, long T-streches can also mislead alignment of the reads to the genome. In addition, due to micro-heterogeneity, the mapped reads that are close to each other in the genome need to be clustered into cleavage and polyadenylation (pA) sites.
-
-To solve the above issues, this pipeline will trim 5' T-streches while recording T-strech length, map cleaned reads to the genome, and use the recorded T-strech length and genomic alignment result to identify PASS (PolyA Site Supporting) reads, which are defined as reads containing >= 2 extra Ts originated from the poly(A) tail but not from the genome. Each PASS read comes from a cleavage and polyadenylation site (CPS) in the genome. Due to microheterogeneity during cleavage and polyadenylation, the CPSs tend to form clusters in a small window in the genome. Therefore PASS reads within a 24-nt window are clustered to define a pA site (PAS). The numbers of PASS reads mapped to genome-wide CPS and PAS in different input sample are then used for further analysis: 
-
-<p align="center">
-  <img src="images/pipeline.png" width="850" height="350" class="center">
-</p>
-
-
-**The pipeline has the following three parts:**
+**Due to the unique features of 3'READS+ data, a customized computational pipeline is required to analyze the data. This pipeline has the following three parts:**
 
 **[Part 1. From fastq files to pA sites](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb)** (Python kernel) 
 1. Register analysis configurations for specific project/experiment
@@ -64,7 +49,7 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 23. Annotate Alu and IRAlu elements (human samples only).
 24. Use DESeq2 to transform data and calcualte pA site fold change (FC).
 
-**[Part 3. Use machine learning to identify features that may significantly influence experimental outcomes](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-3.ipynb)** (Python kernel) 
+**[Part 3. Use machine learning to identify features that may influence experimental outcomes](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-3.ipynb)** (Python kernel) 
 1. Prepare training and test data
 2. Select the most promising models using cross validation
 3. Fine tune hyper parameters of the support vector machine (SVM) model and the gradient boosting tree (XGboost) model
