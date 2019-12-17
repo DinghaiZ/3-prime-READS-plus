@@ -65,11 +65,10 @@ To solve the above issues, this pipeline will trim 5' T-streches while recording
 24. Use DESeq2 to transform data and calcualte pA site fold change (FC).
 
 **[Part 3. Use machine learning to identify features that may significantly influence experimental outcomes](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-3.ipynb)** (Python kernel) 
-1. Prepare data
-2. Select the most promising machine learning models using cross validation
-3. Fine tune hyper parameters of the support vector machine (SVM) model
-4. Fine tune hyper parameters of the gradient boosting tree (XGboost) model
-5. Model interpretation
+1. Prepare training and test data
+2. Select the most promising models using cross validation
+3. Fine tune hyper parameters of the support vector machine (SVM) model and the gradient boosting tree (XGboost) model
+4. Model interpretation
 
 
 
