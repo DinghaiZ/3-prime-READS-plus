@@ -340,6 +340,46 @@ seeFastqPlot = function(fqlist, arrange=c(1,2,3,4,5,6,7,8), ...){
 }
 
 
+get_protein_localization = function(df = pas, localization_file){
+  #` Add protein localization info to the dataframe df
+    
+  # df can contain poly(A) sites or pairs of poly(A) sites
+  # The gene_symbol column in df is required for joining the dataframes
+    
+  require(dplyr)
+  
+  localizations = read.csv(localization_file, as.is = T) %>%
+    distinct()
+
+  m = localizations[, -grep("gene_symbol|localizations", names(localizations))]
+    
+  localizations = localizations %>%
+    mutate(Other = as.integer(rowSums(m) == 0)) %>%
+    dplyr::select(-localizations)
+  
+  names(localizations) = paste0("YSU.", names(localizations)) 
+
+  names(localizations) = sub("YSU.gene_symbol", "gene_symbol", names(localizations)) 
+
+  localizations = subset(localizations, !is.na(gene_symbol))
+  localizations = subset(localizations, gene_symbol != "")
+  localizations = subset(localizations, gene_symbol != "Unknown")
+  
+  # Genes not found in localizations will be NA
+  df$gene_symbol = toupper(df$gene_symbol)
+  localizations$gene_symbol = toupper(localizations$gene_symbol)
+  df = left_join(df, localizations, by="gene_symbol") 
+  
+  # pAs in introns, UA, etc should not be annotated with protein localization
+  if("region" %in% names(df)){ 
+    for(loc in grep("gene_symbol", names(localizations), value=T, invert=T)){
+      df[df$region != "3UTR", loc] = NA
+    }
+  }
+  df
+}
+
+
 create_3UTRs_from_pAs = function(pas){
   #` Create 3'UTR GRanges
   required_columns = c("region", "gene_symbol", "pAid", "cds_start", "cds_end")
@@ -361,6 +401,110 @@ create_3UTRs_from_pAs = function(pas){
   df = df[complete.cases(df),]
   
   makeGRangesFromDataFrame(df, keep.extra.columns=T)
+}
+
+get_hg19_Alu = function(df=pas, txdb_path,
+                        repeat.table=file.path(SHARED_DATA_DIR, "hg19_rmsk"), 
+                        ignore.intron.Alu = T, 
+                        keep.alu.direction = F){
+  #` A function to annotate Alu elements in hg19
+    
+  rmsk = read.table(repeat.table, header = T, sep = "\t", as.is = T, comment.char = "")
+  alu = subset(rmsk, repFamily == "Alu", select = names(rmsk)[c(2:11, 14:16)])
+  # If "strand" is "+": 
+    # The sequence between "genoStart" and "genoEnd" on the positive strand 
+    # is similar to the "repName"
+  # If "strand" is "-": 
+    # The sequence between "genoStart" and "genoEnd" on the minus strand 
+    # is similar to the "repName"
+  
+  # If a 3'UTR is on the "+" strand and it contains an Alu element 
+    # defined by ("genoName", "genoStart", "genoEnd", "strand"):
+  #    if the Alu "strand" is "+": the Alu in 3'UTR is "S" (sense)
+  #    if the Alu "strand" is "-": the Alu in 3'UTR is "AS" (anti-sense)
+  # If a 3'UTR is on the "-" strand and it contains an Alu element
+    # defined by ("genoName", "genoStart", "genoEnd", "strand"):
+  #    if the Alu "strand" is "+": the Alu in 3'UTR is "AS" (anti-sense)
+  #    if the Alu "strand" is "-": the Alu in 3'UTR is "S" (sense)
+  
+  alu$alu.id = 1:nrow(alu)
+  
+  # Map Alu to 3'UTRs
+  require(GenomicRanges)
+  pA.gr = create_3UTRs_from_pAs(df)
+    
+  # Sense
+  alu.s = alu[, c("genoName", "genoStart", "genoEnd", "strand", "repName", 
+                  "repStart", "repEnd", "alu.id")] 
+  names(alu.s) = c("chr", "start", "end", "strand", "repName", 
+                   "repStart", "repEnd", "alu.id")
+  alu.s.gr = makeGRangesFromDataFrame(alu.s, keep.extra.columns = T) 
+    
+  # Anti-sense
+  alu.a = alu.s
+  alu.a$strand = ifelse(alu.a$strand == "+", "-", "+")
+  alu.a.gr = makeGRangesFromDataFrame(alu.a, keep.extra.columns = T) 
+  
+  # Remove alu in introns 
+  if(ignore.intron.Alu){
+    txdb = loadDb(txdb_path)
+    introns = intronsByTranscript(txdb)
+    alu.s.gr = subsetByOverlaps(alu.s.gr, introns, type = "within", invert = T)
+    alu.a.gr = subsetByOverlaps(alu.a.gr, introns, type = "within", invert = T)
+  }
+  
+  pA.alu.s = mergeByOverlaps(alu.s.gr, pA.gr, type="within")
+  pA.alu.s$direction = "s"
+  names(pA.alu.s)[1] = "alu.gr"
+  
+  pA.alu.a = mergeByOverlaps(alu.a.gr, pA.gr, type="within")
+  pA.alu.a$direction = "a"
+  names(pA.alu.a)[1] = "alu.gr"
+  
+  pA.alu = rbind(pA.alu.s, pA.alu.a)
+  names(pA.alu) = sub("^pA.gr$", "utr3.gr", names(pA.alu))
+  pA.alu$alu.gr = as.character(pA.alu$alu.gr)     
+  pA.alu$utr3.gr = as.character(pA.alu$utr3.gr)  
+  
+  require(dplyr)
+  require(tidyr)
+  alu.df = as.data.frame(pA.alu) %>% 
+    mutate(signed.start = as.numeric(sub(".+?:(\\d+?)-\\d+:([+-])", "\\2\\1", alu.gr))) %>% 
+    group_by(gene_symbol, pAid, utr3.gr) %>%
+    arrange(signed.start) %>%
+    summarize(num_Alu = n(), 
+              alu.directions = paste(direction, collapse=";"), 
+              repNames = paste(repName, collapse=";"), 
+              alu.ids = paste(alu.id, collapse=";"),
+              alu.grs = paste(alu.gr, collapse=";")) %>%
+    dplyr::filter(num_Alu < 100)
+  
+  
+  alu.df$alu.s = !is.na(alu.df$alu.directions) & !grepl("a", alu.df$alu.directions) 
+  alu.df$alu.a = !is.na(alu.df$alu.directions) & !grepl("s", alu.df$alu.directions)
+  alu.df$alu.a.s = !is.na(alu.df$alu.directions) & grepl("a;s", alu.df$alu.directions)
+  alu.df$alu.s.a = !is.na(alu.df$alu.directions) & grepl("s;a", alu.df$alu.directions) 
+  
+  require(stringr)
+  # Number of possible pairs of a/s or s/a is the min of number of s and number of a.
+  alu.df$num_IRAlu = pmin(str_count(alu.df$alu.directions, pattern = "s"),
+                          str_count(alu.df$alu.directions, pattern = "a"))
+  
+  alu.df$Alu_type = ifelse(alu.df$alu.a.s | alu.df$alu.s.a, "IRAlu", alu.df$num_Alu)
+  alu.df$Alu_type[!alu.df$Alu_type %in% c("1", "2", "IRAlu")] = ">=3"
+  
+  cols = c("pAid", "Alu_type", "num_Alu", "num_IRAlu", "alu.s", "alu.a", "alu.a.s", "alu.s.a")
+  if(keep.alu.direction){
+    cols = c(cols, "alu.directions")
+  }
+  
+  alu.df = alu.df[, cols]
+  df = merge(df, alu.df, by = "pAid", all.x=T)
+  df$Alu_type[is.na(df$Alu_type)] = "0"
+  df$num_Alu[is.na(df$num_Alu)] = 0
+  df$num_IRAlu[is.na(df$num_IRAlu)] = 0
+  
+  df
 }
 
 
