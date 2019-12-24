@@ -898,13 +898,14 @@ get_red = function(data, cols = "UTR3_size", neighbor = F, toptwo = F, match_onl
 
 
 #### Convert pAid into a dataframe containing chr, pA_pos, and strand info
-pAid2pos = function(pairwise.pas){
-  pAid.i = pairwise.pas$Prx_pA
-  pAid.j = pairwise.pas$Dis_pA
+pAid2pos = function(pap){
+  pAid.i = pap$Prx_pA
+  pAid.j = pap$Dis_pA
+  
   pA.pos.df = as.data.frame(do.call(rbind, strsplit(pAid.i, "[+-]")), 
                             stringsAsFactors = F)
-  #pos.i.string = "Prx_pA_pos"
   names(pA.pos.df) = c("chr", "Prx_pA_pos")
+
   pA.pos.df$chr = as.character(pA.pos.df$chr)
   pA.pos.df$Prx_pA_pos = as.integer(pA.pos.df$Prx_pA_pos)
   pA.pos.df$strand = as.vector(sub(".*?([+-])\\d*", "\\1", pAid.i, perl = T))
@@ -913,7 +914,7 @@ pAid2pos = function(pairwise.pas){
                                           stringsAsFactors = F)[,2]
   pA.pos.df$Dis_pA_pos = as.integer(pA.pos.df$Dis_pA_pos)
   
-  cbind(pA.pos.df, pairwise.pas)
+  cbind(pA.pos.df, pap)
 }
 
 #### If the input is just pas (with only one pAid column)
