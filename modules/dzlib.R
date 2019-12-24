@@ -369,6 +369,8 @@ get_protein_localization = function(df = pas, localization_file){
   df$gene_symbol = toupper(df$gene_symbol)
   localizations$gene_symbol = toupper(localizations$gene_symbol)
   df = left_join(df, localizations, by="gene_symbol") 
+
+  df$gene_symbol = Hmisc::capitalize(tolower(df$gene_symbol))
   
   # pAs in introns, UA, etc should not be annotated with protein localization
   if("region" %in% names(df)){ 
