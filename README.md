@@ -52,7 +52,7 @@ About 70% of mRNA genes in eukaryotes contain multiple cleavage and polyadenylat
 **[Part 3. Use machine learning to identify features that may influence experimental outcomes](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-3.ipynb)** (Python kernel) 
 1. Prepare training and test data
 2. Select the most promising models using cross validation
-3. Fine tune hyper parameters of the support vector machine (SVM) model and the gradient boosting tree (XGboost) model
+3. Fine tune hyper parameters of the support vector machine (SVM) model and the gradient boosted tree (XGboost) model
 4. Model interpretation
 
 
