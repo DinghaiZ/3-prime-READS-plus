@@ -21,20 +21,9 @@ if(species == "mouse"){
   ensembl_dataset = useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl")
 }
 
-# # filters
-# listFilters(ensembl_dataset)[grepl("symbol", listFilters(ensembl_dataset)[,1]),]
-# listFilters(ensembl_dataset)[grepl("uniprot", listFilters(ensembl_dataset)[,1]),] 
-# listFilters(ensembl_dataset)[grepl("wissprot", listFilters(ensembl_dataset)[,1]),] 
- 
-# # attributes
-# listAttributes(ensembl_dataset)[,1][grepl("symbol", listAttributes(ensembl_dataset)[,1])] 
-# listAttributes(ensembl_dataset)[,1][grepl("entrezgene", listAttributes(ensembl_dataset)[,1])] 
-# listAttributes(ensembl_dataset)[grepl("description", listAttributes(ensembl_dataset)[,1]),] 
-
 # Query biomart in minibatches (nrow(df) is 4080818, too big for biomaRt in one batch) 
 result = data.frame()
 for(start in seq(1, nrow(df), 10000)){ 
-#   print(start)
   end = min(start + 10000 - 1, nrow(df))
   
   if(species == "mouse"){

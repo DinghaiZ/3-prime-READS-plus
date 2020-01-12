@@ -23,15 +23,18 @@ def mfe_sliding_window(seq, window_size=100, step_size=50):
     # Return the min, median, max, and mean
     return min(mfes), np.median(mfes), max(mfes), sum(mfes)/len(mfes)
       
-def get_mfe(df, seq_column="exonic_3UTR_seq", num_workers=8,
-            window_size=100, step_size=50):
+
+def get_mfe(df, 
+            seq_column="exonic_3UTR_seq", 
+            num_workers=8,
+            window_size=100, 
+            step_size=50):
+  # Use Dask for parallel computing
   ddata = dd.from_pandas(df, npartitions=num_workers)
   mfe_stats = (ddata
                .map_partitions(lambda df: 
                                df.apply(lambda row:
-                                        mfe_sliding_window(row[seq_column],
-                                                           window_size,
-                                                           step_size),
+                                        mfe_sliding_window(row[seq_column], window_size, step_size),
                                         axis=1
                                        )
                                )

@@ -7,6 +7,8 @@ theme_set(theme_bw(base_size = 15) + theme(plot.title = element_text(hjust = 0.5
 
 rename_grl = function(grl, old_key = "ACCNUM", new_key = "SYMBOL"){
     # A function to rename GRanges in a GRangeList.
+    require(AnnotationDbi)
+    require(GenomicRanges)
     
     # Convert a GRangeList to a GRanges for faster calculation
     gr = unlist(grl)
@@ -25,7 +27,7 @@ rename_grl = function(grl, old_key = "ACCNUM", new_key = "SYMBOL"){
 }
 
 findPotentialStartsAndStops = function(sequence){
-  library("Biostrings")
+  require(Biostrings)
   # Define a vector with the sequences of potential start and stop codons
   codons = c("ATG", "TAA", "TAG", "TGA")
   sequence = toupper(sequence)
@@ -59,7 +61,6 @@ findPotentialStartsAndStops = function(sequence){
   return(mylist)
 }
 
-
 findORFsinSeq = function(sequence){
   require(Biostrings)
   # Make vectors "positions" and "types" containing information on the positions of ATGs 
@@ -89,7 +90,8 @@ findORFsinSeq = function(sequence){
           posdiffmod3 = posdiff %% 3
           # Add in the length of the stop codon
           orflength = posj - posi + 3
-          if (typei == "ATG" && (typej == "TAA" || typej == "TAG" || typej == "TGA") && posdiffmod3 == 0){
+          if (typei == "ATG" && (typej == "TAA" || typej == "TAG" || typej == "TGA")
+                        && posdiffmod3 == 0){
             # Check if we have already used the stop codon at posj+2 in an ORF
             numorfs = length(orfstops)
             usedstop = -1
@@ -101,7 +103,8 @@ findORFsinSeq = function(sequence){
             }
             if (usedstop == -1){
               orfstarts = append(orfstarts, posi, after=length(orfstarts))
-              orfstops = append(orfstops, posj+2, after=length(orfstops)) # Including the stop codon.
+              # Including the stop codon.
+              orfstops = append(orfstops, posj+2, after=length(orfstops)) 
               orflengths = append(orflengths, orflength, after=length(orflengths))
             }
             found = 1
@@ -119,8 +122,7 @@ findORFsinSeq = function(sequence){
   # Find the lengths of the ORFs that we have
   orflengths = numeric()
   numorfs = length(orfstarts)
-  for (i in 1:numorfs)
-  {
+  for (i in 1:numorfs){
     orfstart = orfstarts[i]
     orfstop = orfstops[i]
     orflength = orfstop - orfstart + 1
@@ -130,7 +132,6 @@ findORFsinSeq = function(sequence){
   names(mylist) = c("starts", "ends", "lengths")
   return(mylist)
 }
-
 
 seeFastq = function(fastq, batchsize=10000, klength=8){ 
   ## Random sample N reads from fastq file (N=batchsize)
@@ -187,7 +188,8 @@ seeFastq = function(fastq, batchsize=10000, klength=8){
   T = q; T[s %in% c("A", "G", "C")] = NA; T = colMeans(T, na.rm=TRUE)
   G = q; G[s %in% c("T", "A", "C")] = NA; G = colMeans(G, na.rm=TRUE)
   C = q; C[s %in% c("T", "G", "A")] = NA; C = colMeans(C, na.rm=TRUE)
-  cstats = data.frame(Quality=c(A, C, G, T), Base=rep(c("A", "C", "G", "T"), each=length(A)), Cycle=c(names(A), names(C), names(G), names(T)))
+  cstats = data.frame(Quality=c(A, C, G, T), Base=rep(c("A", "C", "G", "T"), 
+                      each=length(A)), Cycle=c(names(A), names(C), names(G), names(T)))
   cstats[,3] = factor(cstats[,3], levels=unique(cstats[,3]), ordered=TRUE) 
   
   ## (D) Relative K-mer Diversity 
@@ -202,7 +204,8 @@ seeFastq = function(fastq, batchsize=10000, klength=8){
   
   ## (E) Number of reads where all Phred scores are above a minimum cutoff
   ev = c("0"=0, "1"=10, "2"=20, "3"=30, "4"=40)
-  edf = sapply(ev, function(x) sapply(as.numeric(names(ev)), function(y) sum(rowSums(q >= x, na.rm=TRUE) >= (rowSums(!is.na(q))-y))))
+  edf = sapply(ev, function(x) sapply(as.numeric(names(ev)), 
+                   function(y) sum(rowSums(q >= x, na.rm=TRUE) >= (rowSums(!is.na(q))-y))))
   rownames(edf) = names(ev); colnames(edf) = ev
   edf = edf/max(edf)*100
   edf = data.frame(Percent=paste(">", colnames(edf), sep=""), t(edf), check.names=FALSE)
@@ -236,7 +239,6 @@ seeFastq = function(fastq, batchsize=10000, klength=8){
               astats=astats, bstats=bstats, cstats=cstats, dstats=dstats, 
               estats=estats, fstats=fstats, gstats=gstats, hstats=hstats))
 }
-
 
 seeFastqPlot = function(fqlist, arrange=c(1,2,3,4,5,6,7,8), ...){
   require(grid)
@@ -339,7 +341,6 @@ seeFastqPlot = function(fqlist, arrange=c(1,2,3,4,5,6,7,8), ...){
   }
 }
 
-
 get_protein_localization = function(df = pas, localization_file){
   #` Add protein localization info to the dataframe df
     
@@ -384,6 +385,7 @@ get_protein_localization = function(df = pas, localization_file){
 
 create_3UTRs_from_pAs = function(pas){
   #` Create 3'UTR GRanges
+
   required_columns = c("region", "gene_symbol", "pAid", "cds_start", "cds_end")
   if(!all(required_columns %in% names(pas))) {
     stop(cat("The input dataframe must contain the following columns: ", 
@@ -509,8 +511,9 @@ get_hg19_Alu = function(df=pas, txdb_path,
   df
 }
 
-
 countAllMotif = function(pas, geno = "mm9", search_from = 0, search_len = 50, motif_width = 4){
+  #` Count number of motifs between search_from and search_len downstream of search_from
+
   # pas must contain "chr", "pA_pos", and "strand" columns
   if(grepl("^mm", geno)){
     require(BSgenome.Mmusculus.UCSC.mm9)
@@ -548,9 +551,9 @@ countAllMotif = function(pas, geno = "mm9", search_from = 0, search_len = 50, mo
   motif_counts
 }
 
-
 plot_nucleotide_profile = function(pA, BSgeno = "BSgenome.Hsapiens.UCSC.hg19", window_size = 100){
 	#` Plot nucleotide profile near pAs
+
 	require(GenomicRanges)
 	require(BSgeno, character.only = T)
 
@@ -590,8 +593,7 @@ plot_nucleotide_profile = function(pA, BSgeno = "BSgenome.Hsapiens.UCSC.hg19", w
 } 
 
 row.fisher = function(rowdat){
-#` Fisher's exact test, accepting a row of 4 integers and returning a p value. 
-# Can be used like apply(x, 1, row.fisher), where x is a 4 column matrix
+  #` Fisher's exact test, accepting a row of 4 integers and returning a p value. 
   m = matrix(rowdat, nrow = 2, byrow=T)
   fisher.test(m)$p.value
 }
@@ -614,7 +616,8 @@ genewise.APA.fisher = function(gene.df){
 }
 
 APA.fisher = function(dat){
-  #` dat must contain "gene_symbol", two "_count" an two corresponding "_gene" columns
+  # Fisher's Exact Test for APA
+  # dat must contain "gene_symbol", two "_count" an two corresponding "_gene" columns
   # the "_gene" column contains total read counts for each gene
   # split the data 
   dat.lst = split(dat, dat$gene_symbol)
@@ -644,8 +647,8 @@ genewise.chi = function(dat){
 }
 
 
-#### for a gene with n pA isoforms, return n-1 combination of neighboring pA sites
 gene2neighorpAPairs = function(gene){
+  #` For a gene with n pA isoforms, return n-1 combination of neighboring pA sites
   if(nrow(gene) > 1){
     # set up the columns
   gene_id = rep(gene$gene_id[1],nrow(gene)-1) 
@@ -661,7 +664,7 @@ gene2neighorpAPairs = function(gene){
     gene = gene[order(gene$pA_pos), ]
   }
   
-  # create neighboring pA pairs
+  # Create neighboring pA pairs
   k = 1
   for (i in 1:(nrow(gene) -1)){
     comparedPAi[k] = gene$pAid[i]
@@ -670,13 +673,12 @@ gene2neighorpAPairs = function(gene){
   }
   cbind(gene_id, gene_symbol, comparedPAi, comparedPAj)
   }
-  
 }
 
-#### For a gene with n pA isoforms, return n*(n-1)/2 combination of pA sites
-gene2pAPairs = function(gene){ # pAid is needed!
+gene2pAPairs = function(gene){ 
+  #` For a gene with n pA isoforms, return n*(n-1)/2 combination of pA sites
   if(nrow(gene) > 1){
-    # set up the columns
+  # Set up the columns
   gene_id = rep(gene$gene_id[1], choose(nrow(gene), 2)) 
   gene_symbol = rep(gene$gene_symbol[1], choose(nrow(gene), 2)) 
   comparedPAi = rep(NA, length(gene_id)) 
@@ -690,10 +692,10 @@ gene2pAPairs = function(gene){ # pAid is needed!
     gene = gene[order(gene$pA_pos), ]
   }
   
-  # create pairwise combinations of pAs
+  # Compare all combinations of the APA isoforms
   k = 1
   for (i in 1:(nrow(gene) -1)){
-    for (j in (i+1):nrow(gene)){ # compare all combinations of the APA isoforms
+    for (j in (i+1):nrow(gene)){ 
       comparedPAi[k] = gene$pAid[i]
       comparedPAj[k] = gene$pAid[j]
       k = k + 1
@@ -704,250 +706,8 @@ gene2pAPairs = function(gene){ # pAid is needed!
   
 }
 
-#### pAs from the same gene will get paired, but no further calculations will be done
-pairwise.pAs = function(data, neighbor = F, toptwo = F, extra_cols = NULL, match_only=F){
-  # pAid is needed!
-  # extra_cols are column names other than those defined below that you want to compare between the isoforms
-  if(is.null(data$gene_id)){
-    data$gene_id = data$gene_symbol
-  }
-  # cols are column names used later for merging data frames
-  if(any(grep("^RAI", names(data)))){
-    cols = grep("^RAI", names(data), value = T)
-  }
-  if(any(grep("APA", names(data)))){
-    cols = grep("APA", names(data), value = T)
-  }
-  if(any(grep("^RPM", names(data)))){
-    cols = grep("^RPM", names(data), value = T)
-  }
-  if(any(grep("^num", names(data)))){
-    cols = grep("^num", names(data), value = T)
-  }
-  if(any(grep("_count$", names(data)))){
-    cols = grep("_count$", names(data), value = T)
-  }
-  cols = c(cols, extra_cols)
-  
-  # split the data frame according to gene ids
-  gene.lst = split(data, data$gene_id)
-  # only keep the genes with at least two APA isoforms
-  gene.lst = gene.lst[sapply(gene.lst, nrow) >= 2]
-  # compare read numbers between combinations of the isoforms in the two fractions
-  if(neighbor == F & toptwo == F){ 
-    cmp.lst = lapply(gene.lst, function(gene) gene2pAPairs(gene))
-  }else if(neighbor == F & toptwo == T){
-    cmp.lst = lapply(gene.lst, function(gene) gene2pAPairs(gene)) ## same as toptwo == F !!!!!!!!
-  }else if (neighbor == T & toptwo == F){
-    cmp.lst = lapply(gene.lst, function(gene) gene2neighorpAPairs(gene))
-  }else{
-    stop()
-  }
-  
-  # only keep non-empty lists
-  #cmp.lst = cmp.lst[sapply(cmp.lst, length) > 0] 
-  
-  # convert the list of df into one df
-  cmp = do.call("rbind", cmp.lst) #### matrix
-  cmp = as.data.frame(cmp, row.names = NULL, stringsAsFactors = FALSE)#"row.names = NULL" avoids duplicated row names; Without "stringsAsFactors = F", everything will be factors  
-  rownames(cmp) = NULL # I thought the row names are already deleted
-  
-  # get strand and pAid information from the original data
-  cmp = merge(cmp, data[,c("pAid", cols)], by.x = "comparedPAj", by.y = "pAid", sort = F)
-  cmp = merge(cmp, data[,c("pAid", cols)], by.x = "comparedPAi", by.y = "pAid", sort = F)
-  
-  names(cmp) = sub("\\.x$", "_Dis", names(cmp))
-  names(cmp) = sub("\\.y$", "_Prx", names(cmp))
-  names(cmp) = sub("comparedPAi", "Prx_pA", names(cmp))
-  names(cmp) = sub("comparedPAj", "Dis_pA", names(cmp))
-  
-  if(match_only == F){
-    if(any(grep("^RAI", names(data)))){
-      # calculate delta RAIs
-      for(string in sub("_Dis", "", grep("(RAI.*)_Dis", names(cmp), value = T, perl = T))){
-        Dis.col.name = paste0(string, "_Dis")
-        Prx.col.name = paste0(string, "_Prx")
-        cmp[, paste0("delt_", string)] = cmp[, Dis.col.name] - cmp[, Prx.col.name]
-      }
-    }
-    
-    if(any(grep("^RPM", names(data)))){
-      # calculate ratio of Dis to Prx pA RPMs
-      for(string in sub("_Dis", "", grep("(RPM.*)_Dis", names(cmp), value = T, perl = T))){
-        
-        Dis.col.name = paste0(string, "_Dis")
-        Prx.col.name = paste0(string, "_Prx")
-        cmp[, paste0("ratio_", sub("^RPM_", "", string))] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
-      }
-    }
-    
-    if(any(grep("^num", names(data)))){
-      # calculate ratio of Dis to Prx pA read numbers
-      for(string in sub("_Dis", "", grep("(num.*)_Dis", names(cmp), value = T, perl = T))){
-        
-        Dis.col.name = paste0(string, "_Dis")
-        Prx.col.name = paste0(string, "_Prx")
-        cmp[, paste0("ratio_", sub("^num_", "", string))] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
-      }
-      #cmp = cmp[, -grep("^num", names(cmp))]
-      #names(cmp) = sub("ratio_", "", names(cmp))
-    }
-    
-    if(any(grep("count$", names(data)))){
-      # calculate ratio of Dis to Prx pA read numbers
-      for(string in sub("_Dis", "", grep("(count.*)_Dis", names(cmp), value = T, perl = T))){
-        
-        Dis.col.name = paste0(string, "_Dis")
-        Prx.col.name = paste0(string, "_Prx")
-        cmp[, sub("counts?", "d2p_ratio", string)] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
-      }
-    }
-    
-    if(any(grep("^HL\\.", names(data)))){
-      # calculate ratio of Dis to Prx pA halflifes
-      for(string in sub("_Dis", "", grep("(^HL\\..*)_Dis", names(cmp), value = T, perl = T))){
-        
-        Dis.col.name = paste0(string, "_Dis")
-        Prx.col.name = paste0(string, "_Prx")
-        cmp[, paste0(string, "_ratio")] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
-        cmp[, paste0(string, "_difference")] = cmp[, Dis.col.name] - cmp[, Prx.col.name]
-      }
-    }
-  }
-  cmp
-}
-
-get.pA.pairs = function(data, cols = "UTR3_size", neighbor = F, toptwo = F, match_only=F){ 
-  # gene_id (or gene_symbol) and pAid are needed in input data!
-  # when toptwo is set to T, rpm values for each sample should also be provided to select the
-  # top two highly expressed isoforms
-  # cols are columns that you want to compare between the isoforms
-  names(data) =  sub("position", "pA_pos", names(data))
-  if(is.null(data$gene_id)){
-    data$gene_id = data$gene_symbol
-  }
-  
-  if(any(grep("_count$", names(data)))){
-    cols = c(grep("_count$", names(data), value = T), cols)
-  }
-  
-  #### for a gene with n pA isoforms, return 1 pair pA isoforms with highest read counts
-  if(toptwo){
-    if(any(grepl("rpm$", names(data)))){
-      # focus on rpm
-      tmp = data[, grep("pAid|gene_id|rpm$", names(data))]
-      # calculate total rpm for each pA isoform
-      tmp$total_rpm = rowSums(data[, grep("rpm$", names(data))])
-      # split the data frame according to gene ids
-      gene.lst = split(tmp, tmp$gene_id)
-      # only keep the genes with at least two APA isoforms
-      gene.lst = gene.lst[sapply(gene.lst, nrow) >= 2]
-      # reorder each dataframe that have > 2 pA isoforms
-      for(i in 1:length(gene.lst)){
-        if(nrow(gene.lst[[i]]) > 2){
-          gene.lst[[i]] = gene.lst[[i]][order(gene.lst[[i]]$total_rpm, decreasing = T)[1:2],]
-        }
-      }
-      # recombine the dataframes, and only keep the pAids
-      tmp = do.call("rbind", gene.lst)$pAid
-      # only keep the pA isoforms in tmp
-      data = subset(data, pAid %in% tmp)
-      rm(tmp)
-      # split the data frame again according to gene ids
-      gene.lst = split(data, data$gene_id)
-      # compare read numbers between combinations of the isoforms in the two fractions
-      cmp.lst = lapply(gene.lst, function(gene) gene2pAPairs(gene))
-    }else{
-      stop("To select top two isoforms, RPM columns should exist in the input.")
-    } 
-  }else{
-    # split the data frame according to gene ids
-    gene.lst = split(data, data$gene_id)
-    # only keep the genes with at least two APA isoforms
-    gene.lst = gene.lst[sapply(gene.lst, nrow) >= 2]
-    # compare read numbers between combinations of the isoforms in the two fractions
-    if(neighbor == F){ 
-      cmp.lst = lapply(gene.lst, function(gene) gene2pAPairs(gene))
-    }else if(neighbor == T){
-      cmp.lst = lapply(gene.lst, function(gene) gene2neighorpAPairs(gene))
-    }
-  }
-  
-  # convert the list of df into one df
-  cmp = do.call("rbind", cmp.lst) #### matrix
-  cmp = as.data.frame(cmp, row.names = NULL, stringsAsFactors = F)#"row.names = NULL" avoids duplicated row names; Without "stringsAsFactors = F", everything will be factors  
-  rownames(cmp) = NULL # I thought the row names are already deleted
-  
-  # get strand and pAid information from the original data
-  cmp = merge(cmp, subset(data, select = c("pAid", cols)), by.x = "comparedPAj", by.y = "pAid", sort = F)
-  cmp = merge(cmp, subset(data, select = c("pAid", cols)), by.x = "comparedPAi", by.y = "pAid", sort = F)
-  
-  # change column names
-  names(cmp) = sub("\\.x$", "_Dis", names(cmp))
-  names(cmp) = sub("\\.y$", "_Prx", names(cmp))
-  names(cmp) = sub("comparedPAi", "Prx_pA", names(cmp))
-  names(cmp) = sub("comparedPAj", "Dis_pA", names(cmp))
-  
-  # calculate Dis to Prx ratios within each sample
-  if(match_only == F){
-    if(any(grep("^RAI", names(data)))){
-      # calculate delta RAIs
-      for(string in sub("_Dis", "", grep("(RAI.*)_Dis", names(cmp), value = T, perl = T))){
-        Dis.col.name = paste0(string, "_Dis")
-        Prx.col.name = paste0(string, "_Prx")
-        cmp[, paste0("delt_", string)] = cmp[, Dis.col.name] - cmp[, Prx.col.name]
-      }
-    }
-    
-    if(any(grep("^RPM", names(data)))){
-      # calculate ratio of Dis to Prx pA RPMs
-      for(string in sub("_Dis", "", grep("(RPM.*)_Dis", names(cmp), value = T, perl = T))){
-        
-        Dis.col.name = paste0(string, "_Dis")
-        Prx.col.name = paste0(string, "_Prx")
-        cmp[, paste0("ratio_", sub("^RPM_", "", string))] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
-      }
-    }
-    
-    if(any(grep("^num", names(data)))){
-      # calculate ratio of Dis to Prx pA read numbers
-      for(string in sub("_Dis", "", grep("(num.*)_Dis", names(cmp), value = T, perl = T))){
-        
-        Dis.col.name = paste0(string, "_Dis")
-        Prx.col.name = paste0(string, "_Prx")
-        cmp[, paste0("ratio_", sub("^num_", "", string))] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
-      }
-      #cmp = cmp[, -grep("^num", names(cmp))]
-      #names(cmp) = sub("ratio_", "", names(cmp))
-    }
-    
-    if(any(grep("count$", names(data)))){
-      # calculate ratio of Dis to Prx pA read numbers
-      for(string in sub("_Dis", "", grep("(count.*)_Dis", names(cmp), value = T, perl = T))){
-        
-        Dis.col.name = paste0(string, "_Dis")
-        Prx.col.name = paste0(string, "_Prx")
-        cmp[, sub("counts?", "d2p_ratio", string)] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
-      }
-    }
-    
-    if(any(grep("^HL\\.", names(data)))){
-      # calculate ratio of Dis to Prx pA halflifes
-      for(string in sub("_Dis", "", grep("(^HL\\..*)_Dis", names(cmp), value = T, perl = T))){
-        
-        Dis.col.name = paste0(string, "_Dis")
-        Prx.col.name = paste0(string, "_Prx")
-        cmp[, paste0(string, "_ratio")] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
-        cmp[, paste0(string, "_difference")] = cmp[, Dis.col.name] - cmp[, Prx.col.name]
-      }
-    }
-  }
-  
-  # return
-  cmp = merge(cmp, unique(data[, c("gene_symbol", "description")]), all.x = T, sort=F)
-}
-
 get_red = function(data, cols = "UTR3_size", neighbor = F, toptwo = F, match_only=F){ 
+  #` Calculate RED
   # gene_id (or gene_symbol) and pAid are needed in input data!
   # when toptwo is set to T, rpm values for each sample should also be provided to select the
   # top two highly expressed isoforms
@@ -982,7 +742,6 @@ get_red = function(data, cols = "UTR3_size", neighbor = F, toptwo = F, match_onl
       tmp = do.call("rbind", gene.lst)$pAid
       # only keep the pA isoforms in tmp
       data = subset(data, pAid %in% tmp)
-      rm(tmp)
       # split the data frame again according to gene ids
       gene.lst = split(data, data$gene_id)
       # compare read numbers between combinations of the isoforms in the two fractions
@@ -1006,7 +765,7 @@ get_red = function(data, cols = "UTR3_size", neighbor = F, toptwo = F, match_onl
   # convert the list of df into one df
   cmp = do.call("rbind", cmp.lst) #### matrix
   cmp = as.data.frame(cmp, row.names = NULL, stringsAsFactors = F)
-  rownames(cmp) = NULL # I thought the row names are already deleted
+  rownames(cmp) = NULL 
   
   # get strand and pAid information from the original data
   cmp = merge(cmp, subset(data, select = c("pAid", cols)), by.x = "comparedPAj", by.y = "pAid", sort = F)
@@ -1019,21 +778,24 @@ get_red = function(data, cols = "UTR3_size", neighbor = F, toptwo = F, match_onl
   names(cmp) = sub("comparedPAj", "Dis_pA", names(cmp))
   
   # calculate Dis to Prx ratios within each sample
-  if(match_only == F){
-    if(any(grep("^RPM", names(data)))){
-      # calculate ratio of Dis to Prx pA RPMs
-      for(string in sub("_Dis", "", grep("(RPM.*)_Dis", names(cmp), value = T, perl = T))){
+  if(!match_only){
+     if(any(grep("^n_", names(data)))){
+      # calculate ratio of Dis to Prx pA read numbers
+      for(string in sub("_Dis", "", grep("^n_.*_Dis", names(cmp), value = T, perl = T))){
         Dis.col.name = paste0(string, "_Dis")
         Prx.col.name = paste0(string, "_Prx")
-        cmp[, paste0("ratio_", sub("^RPM_", "", string))] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
+        cmp[, paste0(string, "_d2p_ratio")] =
+           log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
       }
     }
+
     if(any(grep("count$", names(data)))){
       # calculate ratio of Dis to Prx pA read numbers
       for(string in sub("_Dis", "", grep("(count.*)_Dis", names(cmp), value = T, perl = T))){
         Dis.col.name = paste0(string, "_Dis")
         Prx.col.name = paste0(string, "_Prx")
-        cmp[, sub("counts?", "d2p_ratio", string)] = log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
+        cmp[, sub("counts?", "d2p_ratio", string)] =
+           log2(cmp[, Dis.col.name]) - log2(cmp[, Prx.col.name])
       }
     }
   }
@@ -1042,9 +804,8 @@ get_red = function(data, cols = "UTR3_size", neighbor = F, toptwo = F, match_onl
   cmp = merge(cmp, unique(data[, c("gene_symbol", "description")]), all.x = T, sort=F)
 }
 
-
-#### Convert pAid into a dataframe containing chr, pA_pos, and strand info
 pAid2pos = function(pap){
+  #` Convert pAid into a dataframe containing chr, pA_pos, and strand info
   pAid.i = pap$Prx_pA
   pAid.j = pap$Dis_pA
   
@@ -1063,7 +824,6 @@ pAid2pos = function(pap){
   cbind(pA.pos.df, pap)
 }
 
-#### If the input is just pas (with only one pAid column)
 split.pAid.in.pas = function(pas){
   pA.pos.df = as.data.frame(do.call(rbind, strsplit(pas$pAid, "[+-]")), 
                             stringsAsFactors = F)
@@ -1074,8 +834,8 @@ split.pAid.in.pas = function(pas){
   cbind(pA.pos.df, pas)
 }
 
-#### Match aUTRs with slightly different pA sites in two data frames allowing distance of "radius" nt
 match.pA.pair = function(df1, df2, radius = 12, keep = "intersect", rm_dup_col = T){
+  #` Match aUTRs with slightly different pA sites in two data frames allowing distance of "radius" nt
   # "keep" can be one of "union", "intersect", "df1", "df2")
   # "rm_dup_col": should duplicated columns be removed?
   
@@ -1210,9 +970,8 @@ match.pA.pair = function(df1, df2, radius = 12, keep = "intersect", rm_dup_col =
 }
 match.pA.pairs = match.pA.pair
 
-
-#### Match pA sites in two data frames, allowing distance of "radius" nt
 match.pA = function(df1, df2, radius = 12, left_join=T, copy_right_columns = T){
+  #` Match pA sites in two data frames, allowing distance of "radius" nt
   # df1 and df2 are data frames containing the pAid (chr1-196924906) column.
   # pA sites whose genomic positions <= 2*radius bp will be considered as the same pA site
   # all rows and columns of df1 will be preserved
@@ -1248,9 +1007,9 @@ match.pA = function(df1, df2, radius = 12, left_join=T, copy_right_columns = T){
                      df2.pAid = df2.gr$df2.pAid[subjectHits(olp)])
   
   data.cmn = merge(matched.pA, df1, by.y = "pAid", by.x = "df1.pAid",  
-                   sort = F, stringAsFactors = F, all=F) ## all = F is important to remove unmatched pAids
+                   sort = F, stringAsFactors = F, all=F) 
   data.cmn = merge(data.cmn, df2, by.x = "df2.pAid", by.y = "pAid", 
-                   sort = F, stringAsFactors = F, all=F) ## all = F is important to remove unmatched pAids
+                   sort = F, stringAsFactors = F, all=F) 
   
   
   # clean up the dataframe
@@ -1265,9 +1024,6 @@ match.pA = function(df1, df2, radius = 12, left_join=T, copy_right_columns = T){
       if (col %in% colnames(df2)){
         colx = paste0(col, ".x")
         coly = paste0(col, ".y")
-        #data.cmn[, colx][is.na(data.cmn[, colx])] = data.cmn[, coly][is.na(data.cmn[, colx])]
-        #print(data.cmn[is.na(data.cmn[, colx]), colx])
-        #print(as.vector(data.cmn[is.na(data.cmn[, colx]), coly]))
         data.cmn[is.na(data.cmn[, colx]), colx] = as.vector(data.cmn[is.na(data.cmn[, colx]), coly])
       }
     }
@@ -1285,9 +1041,6 @@ match.pA = function(df1, df2, radius = 12, left_join=T, copy_right_columns = T){
   # remove .y columns 
   data.cmn = data.cmn[, -grep("\\.y", names(data.cmn))]
   names(data.cmn) = sub("\\.x", "", names(data.cmn))
-  
-  ### combine data for pAs in df1 that match to >=1 pAs in df2 ??
-  ### Not necessary for now
   
   # return
   data.cmn
