@@ -64,12 +64,7 @@ class FastqRecord():
         T_length1 = len(match1.groups()[1])
         self.seq = self.seq[match1.end():]
         self.qual = self.qual[match1.end():]
-        self.name = ''.join(['TS', 
-                             str(T_length1),
-                             match1.groups()[0], 
-                             ':', 
-                             self.name
-                             ])
+        self.name = ''.join(['TS', str(T_length1), match1.groups()[0], ':', self.name])
 
         if T_length1 > 0: self.trimmed5T = True
 
@@ -85,12 +80,8 @@ class FastqRecord():
                     T_length = T_length1 + 1 + T_length2
                     # Attach the trimmed sequence to the read name
                     # for comparison with genomic sequence later
-                    self.name = ''.join(['TS', 
-                                         str(T_length),
-                                         match1.groups()[0], 
-                                         '::',  
-                                         match2.group(0),
-                                         ':',
+                    self.name = ''.join(['TS', str(T_length), match1.groups()[0], '::',  
+                                         match2.group(0), ':',
                                          self.name[self.name.find(':')+1:]
                                          ])
 
@@ -110,8 +101,7 @@ class FastqRecord():
 		# Trim randNT3 NT from 3' end if the 5' RNA ligation adapter has been 
 		# removed
         if re.search('cutadapt$', self.name):
-            self.name = self.name.replace('cutadapt', 
-			                              '<' + self.seq[-randNT3:] + '>')
+            self.name = self.name.replace('cutadapt', '<' + self.seq[-randNT3:] + '>')
             self.seq = self.seq[:-randNT3]
             self.qual = self.qual[:-randNT3]
             self.trimmed3N = True
@@ -179,8 +169,7 @@ class FastqFile():
             for fastq_record in self.get_fastq_record():
                 fastq_record.trim_5p_Ts(self.randNT5)
                 if fastq_record.trimmed5T: self.trimmed5T_num += 1
-                if len(fastq_record) >= 18:
-                    fout.write(str(fastq_record))
+                if len(fastq_record) >= 18: fout.write(str(fastq_record))
 
 
 def merge_and_rename(selected_fastq_files, output_file, rawfastq_dir):
@@ -213,9 +202,9 @@ def trim_write_count_fastq(filename, randNT5, randNT3):
     '''A function for trimming and writing fastq records. Also counts fastq 
     records in input and output files.
     '''
-    FF = FastqFile(filename, randNT5, randNT3)
-    FF.create_trimmed_fastq_file()
-    return Path(FF.name).name, FF.read_num, FF.trimmed5T_num
+    ff = FastqFile(filename, randNT5, randNT3)
+    ff.create_trimmed_fastq_file()
+    return Path(ff.name).name, ff.read_num, ff.trimmed5T_num
 
 
 def load_fasta_genome(genome_dir):
@@ -439,11 +428,11 @@ def count_bam(bam_file):
 
 def count_5T_stretch(sam_file, max_TS = 25):
     with open(sam_file, 'r') as fin:
-            fstring = fin.read()
-            # Search 5' T-strech patterns in the file
-            TS = re.findall('\nTS(\d+)', fstring)  
-            # Count number of different lengths (up to 30) of T-stretch
-            return [TS.count(str(i)) for i in range(max_TS + 1)]  
+        fstring = fin.read()
+        # Search 5' T-strech patterns in the file
+        TS = re.findall('\nTS(\d+)', fstring)  
+        # Count number of different lengths (up to 30) of T-stretch
+        return [TS.count(str(i)) for i in range(max_TS + 1)]  
 
 
 def summarize_5T_stretch(sam_files, processes, max_TS = 25):
@@ -639,18 +628,15 @@ def cluster_pass_reads(pass_files,
        # Read sam file, calculate read id, and count number of reads
         fin = open(pass_file, 'r')
         for line in fin:
-            if line[0] == '@':
-                continue
+            if line[0] == '@': continue
             elements = line.split()
             chromosome = elements[2]
             flag = elements[1]
 
             if (direction == 'reverse' and flag == '16') or \
-                    (direction == 'forward' and flag == '0'):
-                strand = '+'
+               (direction == 'forward' and flag == '0'): strand = '+'
             elif (direction == 'reverse' and flag == '0') or \
-                    (direction == 'forward' and flag == '16'):
-                strand = '-'
+                 (direction == 'forward' and flag == '16'): strand = '-'
 
             position = re.search(re_pattern, elements[-1]).group(1)
 
@@ -833,7 +819,7 @@ def make_url(project, experiment, sam_dir, sam_files, genome_size,
     f.close()
 
 
-def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length = 5):
+def pick_A_stretch(pass_in, astretch_out, non_astretch_out, min_length=5):
     '''Pick PASS reads with at least min_length mapped 5' Ts in pass_in and copy 
     them into the astretch_out file. '''
 
