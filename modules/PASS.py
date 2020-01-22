@@ -786,7 +786,7 @@ def make_url(project, experiment, sam_dir, sam_files, genome_size,
     elif re.search('\.pass$', sam_files[0]):
         read_type = 'PASS' 
     else:
-        read_type = 'other'
+        read_type = 'RNASeq'
     # Convert sam files into bigwig files 
     with mp.Pool(processes = processes) as pool:
         pool.starmap(sam2bigwig, zip(sam_files, 
