@@ -56,7 +56,7 @@ About 70% of mRNA genes in eukaryotes contain multiple cleavage and polyadenylat
 4. Model interpretation
 
 **[Part 4. Create a CNN model to predict if DNA sequences contain cleavage and polyadenylation sites](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/notebooks/Part-4.ipynb)** (Python kernel) 
-1. Create positive and negative sequence samples
+1. Create positive and negative sequence examples
 2. Convert sequences into numeric arrays
 3. Build a CNN model
 4. Fit the model
