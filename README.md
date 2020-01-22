@@ -7,7 +7,7 @@ About 70% of mRNA genes in eukaryotes contain multiple cleavage and polyadenylat
   <img src="images/flowchart.jpg" width="400" height="400">
 </p>
 
-**Due to the unique features of 3'READS+ data, a customized computational pipeline is required to analyze the data. This pipeline has the following three parts:**
+**Due to the unique features of 3'READS+ data, a customized computational pipeline is required to analyze the data. This pipeline has the following four parts:**
 
 **[Part 1. From fastq files to pA sites](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/projects/project_1/experiment_1/notebooks/Part-1.ipynb)** (Python kernel) 
 1. Register analysis configurations for specific project/experiment
@@ -55,7 +55,12 @@ About 70% of mRNA genes in eukaryotes contain multiple cleavage and polyadenylat
 3. Fine tune hyper parameters of the support vector machine (SVM) model and the gradient boosted tree (XGboost) model
 4. Model interpretation
 
-
+**[Part 4. Create a CNN model to predict if DNA sequences contain cleavage and polyadenylation sites](https://github.com/DinghaiZ/3-prime-READS-plus/blob/master/notebooks/Part-4.ipynb)** (Python kernel) 
+1. Create positive and negative sequence samples
+2. Convert sequences into numeric arrays
+3. Build a CNN model
+4. Fit the model
+5. Check performance
 
 ## What are in each folder?
 
