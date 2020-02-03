@@ -1049,5 +1049,56 @@ match.pAs = match.pA
 match.pAs.2 = match.pA  
 
 
+get_eCLIP_scores = function(grl = UTR5, 
+                            grl_region = "UTR5",
+                            bg_grl = NULL, # background grl (such as introns)
+                            cell = "HepG2",
+                            eCLIP_bed_file=file.path(SHARED_DATA_DIR, "BED_IDR_HepG2.csv")
+                            ){
+    # A function that sum eCLIP scores for eCLIP peaks mapped to each gr in grl but not in
+    # bg_gr
+    
+    oldw = getOption("warn")
+    options(warn = -1)
 
-
+    require(dplyr)
+    require(GenomicRanges)
+    # Container for saving the scores
+    scores = data.frame(tx_id = names(grl), stringsAsFactors=F)
+    
+    df = read.csv(eCLIP_bed_file)
+    
+    rbps = sub(paste0("_", cell, "_IDR"), "", unique(df$dataset_label))
+    rbps = toupper(trimws(rbps))
+    
+    for(rbp in rbps){
+        rbp_label = paste0(rbp, "_", cell, "_IDR")
+        rbp_scores_df = subset(df, toupper(dataset_label)==toupper(rbp_label))
+        # Create RBP GR
+        rbp_gr = makeGRangesFromDataFrame(rbp_scores_df, keep.extra.columns=T)
+        # Remove overlaps with background (such as introns)
+        if(!is.null(bg_grl)){
+            rbp_gr = rbp_gr[!rbp_gr %within% bg_grl] 
+        }
+        # Find overlaps
+        olp = findOverlaps(rbp_gr, grl, type="within")
+        # Alignment 
+        if(length(olp)>0){# There could be no overlap! 
+            # Align GRs
+            olp_df = data.frame(tx_id = scores[subjectHits(olp), "tx_id"], 
+                                rbp_score = rbp_scores_df[queryHits(olp), 
+                                            'log2.eCLIP.fold.enrichment.over.size.matched.input.'])
+            # Aggregate RBP scores
+            olp_df %<>% group_by(tx_id) %>% mutate(rbp_score=sum(rbp_score)) %>% distinct()
+        }else{
+            olp_df = data.frame(tx_id = scores$tx_id, rbp_score = 0)
+        }
+        # Rename column 
+        names(olp_df) = sub("^rbp_score$", paste0(grl_region, "_", rbp, "_eCLIP"), names(olp_df))
+        # Add to scores  
+        scores = merge(scores, olp_df, by="tx_id", all.x=T, sort=F)
+    }
+    options(warn = oldw)
+    scores[is.na(scores)] = 0
+    scores
+}
